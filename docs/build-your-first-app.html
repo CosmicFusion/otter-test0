@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build your first Otter app | step by step</title>
+  <meta name="description" content="Hands-on tutorial: run otter-examples, try both shells, add a button, and use debug overlays.">
+  <link rel="icon" href="assets/otter-shell-icon.png" type="image/png">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-logo" href="https://docs.otter-shell.org/developers/creating-an-app">
+        <img class="logo-light" src="assets/otter-shell-wordmark-light.png" alt="Otter Shell">
+        <img class="logo-dark" src="assets/otter-shell-wordmark-dark.png" alt="Otter Shell">
+      </a>
+      <span class="site-badge">tutorial</span>
+    </div>
+  </header>
+
+  <div class="page">
+    <nav class="sidebar" aria-label="Tutorial steps">
+      <p class="sidebar-title">Steps</p>
+      <a href="#before-you-start">Before you start</a>
+      <a href="#task-1">1. Get the template</a>
+      <a href="#task-2">2. Build and test</a>
+      <a href="#task-3">3. Run the window</a>
+      <a href="#task-4">4. Run the overlay</a>
+      <a href="#task-5">5. Add a button</a>
+      <a href="#task-6">6. Try debug overlays</a>
+      <a href="#task-7">7. Pick a shell</a>
+      <a href="#next">What next?</a>
+    </nav>
+
+    <main class="content">
+      <div class="content-inner">
+        <h1 class="page-title">Build your first Otter app</h1>
+        <p class="lead">
+          Run the template, poke the UI, add a button. Layer shell vs XDG is easier to see once you've clicked around.
+          For what each file does, see the <a href="creating-wayland-apps.html">code walkthrough</a>.
+        </p>
+
+        <p class="guide-switch">
+          <strong>Two guides:</strong> this page is the tutorial;
+          <a href="creating-wayland-apps.html">creating-wayland-apps.html</a> is the reference.
+        </p>
+
+        <section id="before-you-start" class="prereq">
+          <h2>Before you start</h2>
+          <ul class="checklist">
+            <li>Zig <strong>0.16.0</strong> (<code>zig version</code>)</li>
+            <li>Wayland session with <code>WAYLAND_DISPLAY</code> set (Hyprland, Sway, etc.)</li>
+            <li><code>otter-examples</code> on disk (clone or copy from the monorepo)</li>
+          </ul>
+        </section>
+
+        <article id="task-1" class="task">
+          <div class="task-header">
+            <span class="task-num">1</span>
+            <h2>Get the template</h2>
+          </div>
+          <p>Open a terminal:</p>
+          <pre><code>cd otter-examples</code></pre>
+          <p>From the monorepo that's usually:</p>
+          <pre><code>cd /path/to/otter-shell/otter-examples</code></pre>
+          <p class="outcome"><strong>Check:</strong> <code>build.zig</code>, <code>src/</code>, and <code>docs/</code> are there.</p>
+        </article>
+
+        <article id="task-2" class="task">
+          <div class="task-header">
+            <span class="task-num">2</span>
+            <h2>Build and run unit tests</h2>
+          </div>
+          <p>Use <code>ReleaseFast</code> for Otter UI apps. Debug builds of the full stack often fail during compile.</p>
+          <pre><code>zig build -Doptimize=ReleaseFast test</code></pre>
+          <p>Exit code 0 is enough. No compositor needed for this step.</p>
+          <p class="outcome"><strong>Check:</strong> command finishes without errors.</p>
+        </article>
+
+        <article id="task-3" class="task">
+          <div class="task-header">
+            <span class="task-num">3</span>
+            <h2>Run the desktop window</h2>
+          </div>
+          <p>Normal resizable XDG window:</p>
+          <pre><code>zig build -Doptimize=ReleaseFast run -- window</code></pre>
+          <p>Try:</p>
+          <ul class="checklist">
+            <li>Hover <strong>Increment</strong> (cursor becomes a pointer; button highlight)</li>
+            <li>Click and hold (button shows pressed state)</li>
+            <li>Release (counter updates; only button + counter repaint)</li>
+            <li>Resize the window (card stays centered)</li>
+          </ul>
+          <p class="outcome"><strong>Check:</strong> themed card, pointer cursor on the button, visible press feedback.</p>
+        </article>
+
+        <article id="task-4" class="task">
+          <div class="task-header">
+            <span class="task-num">4</span>
+            <h2>Run the layer-shell overlay</h2>
+          </div>
+          <p>Quit the window, then:</p>
+          <pre><code>zig build -Doptimize=ReleaseFast run -- layer</code></pre>
+          <ul class="checklist">
+            <li>Same card, pinned top-right</li>
+            <li>Click outside the card to dismiss</li>
+          </ul>
+          <p class="outcome"><strong>Check:</strong> floating overlay, not a normal taskbar window.</p>
+        </article>
+
+        <article id="task-5" class="task">
+          <div class="task-header">
+            <span class="task-num">5</span>
+            <h2>Add a second button (one file)</h2>
+          </div>
+          <p>All demo UI is in <code>src/ui/demo.zig</code>.</p>
+
+          <h3>5a: Add a Surface ID</h3>
+          <p>In <code>pub const Ids</code>:</p>
+          <pre><code>pub const reset = ui.SurfaceId.namedComptime("demo.reset");</code></pre>
+          <p>If you add hit targets, bump <code>.hit_regions</code> in <code>UiState</code> (e.g. 8 to 9).</p>
+
+          <h3>5b: Add the button node</h3>
+          <p>In <code>buildCard()</code>, add a leaf (widen <code>content</code> if needed):</p>
+          <pre><code>self.content[4] = .{
+    .id = Ids.reset,
+    .kind = .leaf,
+    .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
+    .content = .{ .button = .{ .text = "Reset", .hovered = ui_state.input.hovered.eql(Ids.reset) } },
+    .hit = .button,
+};</code></pre>
+          <p>Point the column <code>.children</code> slice at the new node.</p>
+
+          <h3>5c: Handle the click</h3>
+          <p>In <code>onPointerPress()</code>, after the increment branch:</p>
+          <pre><code>if (press.id.eql(Ids.reset)) {
+    self.counter = 0;
+    self.refreshCounterText();
+    self.damageCounter(damage);
+    return .handled;
+}</code></pre>
+          <p>Copy the increment button's press/release damage pattern if you want hover and click styling on Reset too.</p>
+
+          <h3>5d: Rebuild and run</h3>
+          <pre><code>zig build -Doptimize=ReleaseFast run -- window</code></pre>
+          <p class="outcome"><strong>Check:</strong> Reset sets the counter to zero. No shell file edits.</p>
+        </article>
+
+        <article id="task-6" class="task">
+          <div class="task-header">
+            <span class="task-num">6</span>
+            <h2>Try debug overlays (window mode)</h2>
+          </div>
+          <p>Built-in SD inspector and FPS overlay:</p>
+          <pre><code>zig build -Doptimize=ReleaseFast run -- window --inspect
+zig build -Doptimize=ReleaseFast run -- window --metrics</code></pre>
+          <p>Or <strong>Ctrl+Shift+I</strong> in the focused window: off, inspector, metrics.</p>
+          <ul class="checklist">
+            <li><strong>Inspector:</strong> hover nodes for Surface IDs and rects</li>
+            <li><strong>Metrics:</strong> live FPS and frame timing</li>
+          </ul>
+          <p class="outcome"><strong>Check:</strong> debug panel drawn on top of the UI.</p>
+        </article>
+
+        <article id="task-7" class="task">
+          <div class="task-header">
+            <span class="task-num">7</span>
+            <h2>Pick layer shell or XDG</h2>
+          </div>
+          <table>
+            <tr><th>Building</th><th>Use</th><th>Start from</th></tr>
+            <tr><td>Launcher, popup, bar widget</td><td>Layer shell</td><td><code>shell/layer_app.zig</code></td></tr>
+            <tr><td>Settings, editor, normal window</td><td>XDG toplevel</td><td><code>shell/xdg_app.zig</code></td></tr>
+          </table>
+          <p>Both call the same <code>ui/demo.zig</code> and <code>ui/draw.zig</code>. Copy the shell that fits your app.</p>
+          <p class="outcome"><strong>Rule of thumb:</strong> app menu + resizable = XDG. Float above everything or dock to an edge = layer shell.</p>
+        </article>
+
+        <section id="next">
+          <h2>What next?</h2>
+          <ul>
+            <li><a href="creating-wayland-apps.html">Code walkthrough</a></li>
+            <li><a href="https://docs.otter-shell.org/developers/creating-an-app">Creating an app</a> (official docs)</li>
+            <li><code>otter-note</code> for layer shell + text input</li>
+            <li><code>otter-settings</code> for a bigger XDG app</li>
+          </ul>
+          <p class="footer-note">
+            Stuck? Check <code>WAYLAND_DISPLAY</code>, layer-shell support for <code>layer</code> mode, and <code>-Doptimize=ReleaseFast</code>.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

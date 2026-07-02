@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>otter-examples walkthrough | Otter Shell</title>
+  <meta name="description" content="Step-by-step guide to the otter-examples template: layer shell, XDG window, Surface Description, and damage tracking.">
+  <link rel="icon" href="assets/otter-shell-icon.png" type="image/png">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="site-logo" href="https://docs.otter-shell.org/developers/creating-an-app">
+        <img class="logo-light" src="assets/otter-shell-wordmark-light.png" alt="Otter Shell">
+        <img class="logo-dark" src="assets/otter-shell-wordmark-dark.png" alt="Otter Shell">
+      </a>
+      <span class="site-badge">otter-examples</span>
+    </div>
+  </header>
+
+  <div class="page">
+    <nav class="sidebar" aria-label="Contents">
+      <p class="sidebar-title">On this page</p>
+      <a href="build-your-first-app.html">Tutorial (step by step)</a>
+      <a href="creating-wayland-apps.html">Code walkthrough</a>
+      <a href="#overview">Overview</a>
+      <a href="#step-1">1. Project layout</a>
+      <a href="#step-2">2. build.zig.zon</a>
+      <a href="#step-3">3. build.zig</a>
+      <a href="#step-4">4. main.zig</a>
+      <a href="#step-5">5. ui/demo.zig</a>
+      <a href="#step-6">6. ui/draw.zig</a>
+      <a href="#step-7">7. shell/frame.zig</a>
+      <a href="#step-8">8. shell/layer_app.zig</a>
+      <a href="#step-9">9. shell/xdg_app.zig</a>
+      <a href="#step-10">10. Run &amp; test</a>
+      <a href="#cheatsheet">Cheat sheet</a>
+    </nav>
+
+    <main class="content">
+      <div class="content-inner">
+        <h1 class="page-title">otter-examples walkthrough</h1>
+        <p class="lead">
+          Two apps, one UI: layer-shell overlay and XDG window.
+          Snippets below say what each file does.
+          More background in the <a href="https://docs.otter-shell.org/developers/creating-an-app">official developer guide</a>.
+        </p>
+
+        <p class="guide-switch">
+          <strong>New here?</strong> Start with the
+          <a href="build-your-first-app.html">step-by-step tutorial</a>, then come back for file-by-file detail.
+        </p>
+
+      <section id="overview">
+        <h2>What you are building</h2>
+        <p>
+          Otter Shell apps talk to Wayland, describe UI with <strong>Surface Description</strong> (SD) trees,
+          and paint through shared libraries instead of hand-writing draw commands. The example shows:
+        </p>
+        <ul>
+          <li>A rounded panel, Otter logo, counter label, and increment button with hover/press styling.</li>
+          <li>Pointer cursor changes over the button; partial damage on hover and click.</li>
+          <li>Two shell backends: <span class="tag">layer</span> overlay and <span class="tag">xdg</span> window.</li>
+        </ul>
+        <p>
+          The loop is always: connect, create a surface, build an SD tree on configure, rasterize dirty rects, commit.
+          Shell code differs; UI code is shared.
+        </p>
+      </section>
+
+      <section id="step-1">
+        <span class="step">Step 1</span>
+        <h2>Project layout</h2>
+        <p>Split by job so newcomers know where to look:</p>
+        <pre><code>otter-examples/
+  build.zig.zon     # dependency versions (published git tags)
+  build.zig         # compile + link rules
+  docs/             # this guide
+  src/
+    assets/         # logo embedded in demo (@embedFile)
+    main.zig        # pick layer or window mode
+    ui/             # demo card + draw pipeline (shell-agnostic)
+    shell/          # Wayland surface lifecycle per shell type</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>ui/demo.zig</dt>
+            <dd>Demo card: state, Surface IDs, SD tree, pointer handlers, cursor shape, partial damage. <strong>Add a button here.</strong></dd>
+            <dt>ui/draw.zig</dt>
+            <dd>Shared paint pipeline both shells call. You rarely need to edit this when adding widgets.</dd>
+            <dt>shell/</dt>
+            <dd>Wayland glue: layer anchors vs XDG configure, event loop, pointer forwarding, <code>applyPointerCursor()</code>.</dd>
+            <dt>main.zig</dt>
+            <dd>Thin entry: install I/O, parse CLI, dispatch to the right shell app.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-2">
+        <span class="step">Step 2</span>
+        <h2>Declare dependencies: <code>build.zig.zon</code></h2>
+        <pre><code>.{
+    .name = .otter_examples,
+    .version = "0.0.1",
+    .fingerprint = 0x36d57dd5f41df13a,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .otter_utils = .{
+            .url = "git+https://git.pika-os.com/otter-shell/otter-utils.git#v0.11.34",
+            .hash = "otter_utils-0.11.34-DYWsuzmFAQD9lrs8mT8WVjpSQwnwJKknOjNTiPGdVfmq",
+        },
+        // ... otter_geo, otter_render, otter_theme, otter_wayland, otter_ui ...
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "assets", "README.md", "docs" },
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>.name = .otter_examples</dt>
+            <dd>Zig package name for the dependency graph. Snake case, no quotes. Zig 0.16 enum literal form.</dd>
+            <dt>.version</dt>
+            <dd>Your app version, not the library tags. Bump when you release this repo.</dd>
+            <dt>.fingerprint</dt>
+            <dd>Package identity hash. If yours is wrong, Zig prints the correct value in the error. Copy that line.</dd>
+            <dt>.minimum_zig_version = "0.16.0"</dt>
+            <dd>Otter Shell targets Zig 0.16 I/O APIs (<code>std.process.Init</code>, <code>std.Io</code>). Older Zig will not compile.</dd>
+            <dt>.dependencies.*.url</dt>
+            <dd>Git URL pinned to tag <code>v0.11.34</code>. Tags keep your build reproducible; monorepo devs swap these for <code>.path</code> locally.</dd>
+            <dt>.dependencies.*.hash</dt>
+            <dd>Output of <code>zig fetch "git+...#v0.11.34"</code>. Zig refuses to build if the tarball changed. That's on purpose.</dd>
+            <dt>.paths</dt>
+            <dd>Files included when this package is fetched as a dependency. Listing <code>docs</code> ships the guide with the template.</dd>
+          </dl>
+        </div>
+        <h3>Which libraries you need and why</h3>
+        <table>
+          <tr><th>Package</th><th>Role in this app</th></tr>
+          <tr><td>otter_utils</td><td><code>utils.io.install</code> threads <code>std.Io</code> through process entry.</td></tr>
+          <tr><td>otter_geo</td><td><code>Point</code>, <code>Rect</code> for pointer hits and damage rects.</td></tr>
+          <tr><td>otter_render</td><td>Fonts, images, SHM surface pixels, text shaping.</td></tr>
+          <tr><td>otter_theme</td><td>Default colors, radii, spacing. No <code>theme.conf</code> needed for the demo.</td></tr>
+          <tr><td>otter_wayland</td><td>Connection, layer shell, <code>XdgToplevel</code>, renderer, <code>DamageTracker</code>.</td></tr>
+          <tr><td>otter_ui</td><td>Surface Description (<code>SurfaceNode</code>, <code>UiState</code>, hit testing, rasterize).</td></tr>
+        </table>
+      </section>
+
+      <section id="step-3">
+        <span class="step">Step 3</span>
+        <h2>Wire the build: <code>build.zig</code></h2>
+        <pre><code>const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const c_allocator = b.option(enum { libc, jemalloc, mimalloc }, "c_allocator", "...") orelse .libc;
+
+    const utils = b.dependency("otter_utils", .{ .target = target, .optimize = optimize });
+    const ui = b.dependency("otter_ui", .{
+        .target = target,
+        .optimize = optimize,
+        .enable_dbus = false,
+        .enable_pipewire = false,
+        .enable_pam = false,
+        .c_allocator = c_allocator,
+    });
+    // ... same pattern for geo, render, theme, wayland ...
+
+    const imports = [_]std.Build.Module.Import{
+        .{ .name = "otter_utils", .module = utils.module("otter_utils") },
+        // one entry per dependency ...
+    };
+
+    const root_module = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &imports,
+    });
+
+    const exe = b.addExecutable(.{ .name = "otter-examples", .root_module = root_module });
+    b.installArtifact(exe);
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>standardTargetOptions / standardOptimizeOption</dt>
+            <dd>Respect <code>-Dtarget=</code> and <code>-Doptimize=</code> from the CLI. Use <code>ReleaseFast</code> for Otter; debug builds can segfault on big transitive compiles.</dd>
+            <dt>c_allocator option</dt>
+            <dd>Lets you point C libraries (FreeType, etc.) at jemalloc/mimalloc if you are profiling heap churn.</dd>
+            <dt>b.dependency("otter_ui", ... enable_dbus = false ...)</dt>
+            <dd>Pulls the UI stack without D-Bus/PipeWire/PAM. Faster builds for a minimal surface-only app.</dd>
+            <dt>imports array</dt>
+            <dd>Maps Zig <code>@import("otter_ui")</code> names to modules. Name must match what source files use.</dd>
+            <dt>No linkSystemLibrary in the app</dt>
+            <dd><code>otter_wayland</code> already links <code>wayland-client</code> and <code>xkbcommon</code> on its module. Zig propagates that to the exe; don't repeat it in your <code>build.zig</code>.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-4">
+        <span class="step">Step 4</span>
+        <h2>Entry point: <code>src/main.zig</code></h2>
+        <pre><code>pub fn main(init: std.process.Init) !void {
+    utils.io.install(init.io);
+
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const mode = if (args.len > 1) Mode.parse(args[1]) orelse {
+        usage();
+        return error.UnknownMode;
+    } else blk: {
+        usage();
+        break :blk .window;
+    };
+
+    switch (mode) {
+        .layer => try layer_app.run(init.gpa),
+        .window => {
+            var xdg_opts: xdg_app.Options = .{};
+            for (args[2..]) |arg| {
+                if (ui.debugOverlayModeFromArg(arg)) |overlay_mode| {
+                    xdg_opts.debug_overlay_mode = overlay_mode;
+                }
+            }
+            try xdg_app.run(init.gpa, xdg_opts);
+        },
+    }
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>std.process.Init</dt>
+            <dd>Zig 0.16 passes I/O, GPA, and args through <code>std.process.Init</code>. No global <code>std.os.argv</code>.</dd>
+            <dt>utils.io.install(init.io)</dt>
+            <dd>Register process I/O before any Otter file or network call.</dd>
+            <dt>init.minimal.args.toSlice</dt>
+            <dd>Args slice from the init arena; freed on exit.</dd>
+            <dt>Mode.parse</dt>
+            <dd>Accepts <code>layer</code>, <code>window</code>, or <code>xdg</code>. Same binary, two demos.</dd>
+            <dt>init.gpa</dt>
+            <dd>General purpose allocator for the long-lived shell app. Short one-shot tools sometimes use an arena instead.</dd>
+            <dt>layer_app.run / xdg_app.run</dt>
+            <dd>Each shell owns its own Wayland objects; UI stays shared underneath.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-5">
+        <span class="step">Step 5</span>
+        <h2>Demo card: <code>src/ui/demo.zig</code></h2>
+        <p>One file for the demo UI: IDs, state, SD tree, pointer handlers, cursor, and damage helpers.</p>
+        <pre><code>pub fn buildCard(self: *Demo, ui_state: *const UiState, title: []const u8) ui.SurfaceNode {
+    const hover = ui_state.input.hovered.eql(Ids.increment);
+    self.content[3] = .{
+        .id = Ids.increment,
+        .content = .{ .button = .{
+            .text = "Increment",
+            .hovered = hover,
+            .hover_background = theme.surfaces.hover,
+            .pressed_background = theme.surfaces.pressed,
+        } },
+        .hit = .button,
+    };
+    // panel + column stack, fixed-size card
+}
+
+pub fn onPointerPress(self: *Demo, ui_state: *UiState, point: Point, damage: *DamageTracker) PressResult {
+    const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
+    if (press.id.eql(Ids.increment)) {
+        self.damageIncrement(damage); // pressed fill via input.active
+        self.counter +%= 1;
+        self.damageCounter(damage);
+        return .handled;
+    }
+    return .none;
+}
+
+pub fn onPointerRelease(self: *Demo, ui_state: *UiState, point: Point, damage: *DamageTracker) bool {
+    const was_active = ui_state.input.active.eql(Ids.increment);
+    _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
+    if (was_active) {
+        self.damageIncrement(damage);
+        return true;
+    }
+    return false;
+}
+
+pub fn applyPointerCursor(seat_state: *ow.SeatState, ui_state: *const UiState) void {
+    // hitTest: .pointer over buttons, .default elsewhere
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>Ids + UiState at top</dt>
+            <dd>Surface IDs and frame bucket sizes sit next to the tree. Bump <code>.elements</code> / <code>.hit_regions</code> when the tree grows.</dd>
+            <dt>buildCard button spec</dt>
+            <dd><code>hover_background</code> and <code>pressed_background</code> come from theme surface tokens. SD also reads <code>input.active</code> while the mouse is down.</dd>
+            <dt>ui_state.input.hovered / .active</dt>
+            <dd><code>dispatch</code> on motion sets hover; press/release set active. Shell code forwards events and calls <code>applyPointerCursor()</code>.</dd>
+            <dt>onPointerPress / onPointerRelease</dt>
+            <dd>Handle clicks by id. Damage the button on press and release so hover/pressed fills repaint. Layer shell quits when press returns <code>.none</code>.</dd>
+            <dt>damageCounter / damageIncrement</dt>
+            <dd>Mark dirty rects before state changes. <code>captureRects</code> runs after each paint.</dd>
+            <dt>cardRect(..., .center)</dt>
+            <dd>Centers the card in a larger XDG window without extra SD spacer nodes.</dd>
+            <dt>@embedFile icon</dt>
+            <dd>Real Otter logo from <code>src/assets/otter-shell-icon.png</code>, embedded at compile time.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-6">
+        <span class="step">Step 6</span>
+        <h2>Draw pipeline: <code>src/ui/draw.zig</code></h2>
+        <pre><code>pub fn draw(frame: Frame) void {
+    if (!frame.damage.hasDamage() and !frame.damage.isFullDamage()) return;
+
+    var acquired = frame.renderer.acquire() orelse return;
+    defer acquired.release();
+
+    const effective = frame.damage.getEffectiveDamage();
+    var ui_frame = frame.ui_state.begin(.{ .viewport = viewport, .font = frame.font, ... });
+
+    if (effective.full) ui_frame.clear(background);
+
+    const root = frame.demo.buildCard(frame.ui_state, frame.shell_label);
+    _ = ui_frame.render(&root, card_rect) catch {};
+    ui_frame.finish() catch {};
+
+    if (!effective.full)
+        for (damage_rects) |rect| acquired.surface.fillRectLogical(rect, background);
+
+    frame.ui_state.rasterize(&acquired.surface, damage_rects, effective.full);
+    frame.renderer.submit(frame.surface, frame.damage);
+    frame.damage.commitFrame();
+    frame.demo.captureRects(frame.ui_state);
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>Early return when no damage</dt>
+            <dd>Guards against accidental draw calls. Combined with frame callbacks, the app stays idle when nothing changed.</dd>
+            <dt>renderer.acquire / release</dt>
+            <dd>Double-buffered SHM pool. <code>acquire</code> maps the back buffer for this frame.</dd>
+            <dt>getEffectiveDamage</dt>
+            <dd>Unions current + previous frame rects for double buffering. Compositor may still show the old buffer briefly.</dd>
+            <dt>ui_state.begin, render, finish</dt>
+            <dd>SD emit phase: builds draw commands in <code>UiState</code>, records element rects and hit regions.</dd>
+            <dt>fillRectLogical on partial damage</dt>
+            <dd>Erases old pixels in dirty rects before rasterize. Layer uses transparent fill; XDG uses theme background.</dd>
+            <dt>ui_state.rasterize(..., damage_rects, full)</dt>
+            <dd>Plays commands back with scissor culling to damaged areas when <code>full == false</code>.</dd>
+            <dt>commitFrame</dt>
+            <dd>Rotates damage lists for next frame. Call once per successful submit.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-7">
+        <span class="step">Step 7</span>
+        <h2>Frame coalescing: <code>src/shell/frame.zig</code></h2>
+        <pre><code>pub fn request(self: *Driver) void {
+    self.needs_redraw = true;
+    if (self.frame_callback != null) return;
+    self.frame_callback = surface.frame() catch return;
+    self.frame_callback.?.setListener(*Driver, frameListener, self);
+    surface.commit();
+}</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>needs_redraw flag</dt>
+            <dd>Input sets dirty state; paint happens on the frame callback (except first configure; see <code>drawNow</code>).</dd>
+            <dt>wl_surface.frame</dt>
+            <dd>Ask compositor to call back at display refresh. Batches rapid hover events into one paint.</dd>
+            <dt>frame_callback != null guard</dt>
+            <dd>Only one pending frame request. Standard Wayland pattern.</dd>
+            <dt>drawNow</dt>
+            <dd>Synchronous paint before the event loop runs. Configure handlers need visible pixels immediately.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-8">
+        <span class="step">Step 8</span>
+        <h2>Layer-shell app: <code>src/shell/layer_app.zig</code></h2>
+        <p>Layer surfaces are overlays: notifications, popups, bar-adjacent panels. They are anchored, not moved by the user.</p>
+        <pre><code>const layer = try layer_shell.getLayerSurface(surface, null, .top, "otter-examples-layer");
+layer.setSize(self.width, self.height);
+layer.setAnchor(.{ .top = true, .right = true });
+layer.setMargin(48, 32, 0, 0);
+layer.setKeyboardInteractivity(.none);
+try ow.setSurfaceTransparent(compositor, surface);</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>getLayerSurface(..., .top, namespace)</dt>
+            <dd>Creates a layer-shell surface on the top layer. Namespace helps compositors identify your overlay.</dd>
+            <dt>setAnchor top + right</dt>
+            <dd>Pins the surface to the top-right of the output. Margins offset from the screen edge in logical px.</dd>
+            <dt>setKeyboardInteractivity(.none)</dt>
+            <dd>No keyboard focus. Fine for a click-only demo.</dd>
+            <dt>setSurfaceTransparent</dt>
+            <dd>Allows rounded panel corners to show desktop through alpha. Pair with transparent background in <code>draw.zig</code>.</dd>
+            <dt>layerListener configure</dt>
+            <dd>On configure: ack serial, resize renderer, <code>markFullDamage</code>, <code>drawNow</code>.</dd>
+            <dt>onPointerButton outside button</dt>
+            <dd><code>demo.onPointerPress</code> returns <code>.none</code> and the layer quits. Press and release both forward into <code>demo.zig</code>; shell calls <code>applyPointerCursor()</code> on motion.</dd>
+            <dt>poll(-1) event loop</dt>
+            <dd>Blocks until Wayland has work. No idle timer.</dd>
+          </dl>
+        </div>
+      </section>
+
+      <section id="step-9">
+        <span class="step">Step 9</span>
+        <h2>XDG toplevel app: <code>src/shell/xdg_app.zig</code></h2>
+        <p>Regular windows: task switcher entry, server or client decorations, resize handles.</p>
+        <pre><code>self.toplevel = try ow.XdgToplevel.createWithOptions(
+    &self.conn,
+    "Otter Examples",
+    "otter-examples",
+    .{ .on_configure = onConfigure, .on_close = onClose, .context = self },
+    .{ .request_server_side_decorations = self.theme.decorations.server_side },
+);
+self.toplevel.bindListeners();
+self.toplevel.setMinSize(demo_mod.Ids.panel_width + 32, demo_mod.Ids.panel_height + 32);</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>XdgToplevel.createWithOptions</dt>
+            <dd>Wraps wl_surface + xdg_surface + xdg_toplevel creation and initial commit.</dd>
+            <dt>title / app_id</dt>
+            <dd>Window title and .desktop matching string compositors show in alt-tab and taskbars.</dd>
+            <dt>on_configure</dt>
+            <dd>Compositor assigns size (0 means "you pick"). Create/resize renderer, full damage, first paint.</dd>
+            <dt>on_close</dt>
+            <dd>User closed the window; stop the loop.</dd>
+            <dt>request_server_side_decorations</dt>
+            <dd>From theme token. CSD vs SSD follows user theme.</dd>
+            <dt>bindListeners</dt>
+            <dd>Call after the app struct has a stable address. Wayland listeners keep pointers.</dd>
+            <dt>background .color in draw</dt>
+            <dd>Opaque window fill. Partial damage erases with theme color before redraw.</dd>
+            <dt>No dismiss on outside click</dt>
+            <dd>Unlike the layer popup, clicking the empty window area does nothing.</dd>
+            <dt>Debug overlays (window mode)</dt>
+            <dd><code>otter-ui</code> ships SD inspector and FPS panel. Pass <code>--inspect</code> or <code>--metrics</code>, or press <strong>Ctrl+Shift+I</strong> to cycle. Needs <code>Keyboard</code>, <code>ui_state.setDebugOverlayMode</code>, pointer routed through <code>dispatch</code>, full damage while overlay is on, and continuous frames in <code>.metrics</code> mode.</dd>
+          </dl>
+        </div>
+        <h3>Layer vs XDG: when to use which</h3>
+        <table>
+          <tr><th>Layer shell</th><th>XDG toplevel</th></tr>
+          <tr><td>Status overlays, popups, on-screen widgets</td><td>Settings, editors, anything in the app menu</td></tr>
+          <tr><td>Anchored position, often smaller than screen</td><td>User-resizable, centered or free placement</td></tr>
+          <tr><td>Transparent root common</td><td>Opaque root typical</td></tr>
+          <tr><td><code>zwlr_layer_shell_v1</code></td><td><code>xdg_wm_base</code> + <code>xdg_toplevel</code></td></tr>
+        </table>
+      </section>
+
+      <section id="step-10">
+        <span class="step">Step 10</span>
+        <h2>Build, run, test</h2>
+        <pre><code>cd otter-examples
+zig build -Doptimize=ReleaseFast test
+zig build -Doptimize=ReleaseFast run -- window
+zig build -Doptimize=ReleaseFast run -- window --metrics
+zig build -Doptimize=ReleaseFast run -- layer</code></pre>
+        <div class="explain">
+          <dl>
+            <dt>-Doptimize=ReleaseFast</dt>
+            <dd>Use <code>ReleaseFast</code> in this monorepo. Debug UI builds can crash at compile or link time.</dd>
+            <dt>test</dt>
+            <dd>Runs tests in <code>main.zig</code> and <code>demo.zig</code>. No Wayland session needed.</dd>
+            <dt>run -- window</dt>
+            <dd>Needs WAYLAND_DISPLAY and a compositor. Opens the XDG demo. Add <code>--inspect</code> or <code>--metrics</code> for debug overlays.</dd>
+            <dt>run -- layer</dt>
+            <dd>Needs compositor with wlr-layer-shell (Hyprland, Sway, etc.). Top-right overlay.</dd>
+          </dl>
+        </div>
+        <h3>Input, damage, draw</h3>
+        <ol>
+          <li>Pointer moves: <code>demo.onPointerMotion</code> updates hover, may damage the button; shell sets cursor shape</li>
+          <li>Button press: <code>onPointerPress</code> sets <code>input.active</code>, damages button + counter</li>
+          <li>Button release: <code>onPointerRelease</code> clears active, damages button again</li>
+          <li>Frame callback runs <code>draw.zig</code>, partial rasterize, <code>captureRects</code></li>
+          <li>Otherwise <code>poll</code> blocks and the app idles</li>
+        </ol>
+      </section>
+
+      <section id="cheatsheet">
+        <h2>Cheat sheet</h2>
+        <table>
+          <tr><th>You want to…</th><th>Edit…</th></tr>
+          <tr><td>Add a button</td><td><code>ui/demo.zig</code>: node in <code>buildCard()</code>, id in <code>onPointerPress()</code> (+ <code>onPointerRelease()</code> for press styling)</td></tr>
+          <tr><td>Pointer cursor over controls</td><td><code>applyPointerCursor()</code> in <code>demo.zig</code>; call from shell on pointer enter/motion</td></tr>
+          <tr><td>Change colors</td><td><code>ui/demo.zig</code> theme tokens, or load <code>theme.conf</code> via <code>otter_theme.loadTheme</code></td></tr>
+          <tr><td>Bigger window default</td><td><code>shell/xdg_app.zig</code> <code>surface_width</code>/<code>height</code></td></tr>
+          <tr><td>Move layer popup</td><td><code>shell/layer_app.zig</code> anchors and margins</td></tr>
+          <tr><td>Debug inspector / FPS</td><td>Window mode: <code>--inspect</code>, <code>--metrics</code>, or Ctrl+Shift+I (<code>xdg_app.zig</code>)</td></tr>
+          <tr><td>Keyboard / text entry</td><td>See <code>otter-note</code> (layer needs <code>setKeyboardInteractivity</code> + <code>TextInput</code>)</td></tr>
+        </table>
+        <p class="footer-note">
+          Full reference: <code>otter-examples/src/</code> in the Otter Shell tree.
+          Next reads: <a href="https://docs.otter-shell.org/developers/creating-an-app">Creating an app</a>,
+          <code>otter-note</code> (layer + text input), <code>otter-settings</code> (XDG + large SD tree).
+        </p>
+      </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
