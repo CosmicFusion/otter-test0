@@ -54,9 +54,10 @@ pub const PointerOpts = struct {
 
 const otter_icon_png = @embedFile("../assets/otter-shell-icon.png");
 
-pub const HoverInfo = struct {
+pub const ButtonInfo = struct {
     id: ui.SurfaceId,
     rect: ?geo.Rect,
+    on_pressed: *const fn (self: *Demo, info: ButtonInfo, damage: *ow.DamageTracker) void,
 };
 
 pub const Demo = struct {
@@ -67,8 +68,7 @@ pub const Demo = struct {
     counter_rect: ?geo.Rect = null,
     card_layers: [2]ui.SurfaceNode = undefined,
     content: [5]ui.SurfaceNode = undefined,
-
-    pub var infos: [2]HoverInfo = [_]HoverInfo{ HoverInfo{ .id = Ids.increment, .rect = null }, HoverInfo{ .id = Ids.reset, .rect = null } };
+    button_infos: [2]ButtonInfo = undefined,
 
     pub fn init(self: *Demo, allocator: std.mem.Allocator) !void {
         self.icon = render.Image.loadFromMemory(allocator, otter_icon_png) catch null;
@@ -107,10 +107,13 @@ pub const Demo = struct {
         self.content[2] = ui.SurfaceNode.label(Ids.counter, self.counterSlice(), Ids.body_font_size, theme.colors.muted);
         self.content[2].layout = .{ .width = .fill, .height = .{ .fixed = 22 }, .align_x = .center };
 
-        self.content[3] = blk: {
+        // Setup Increment Button
+
+        {
             const id = Ids.increment;
             const text = "Increment";
-            break :blk .{
+
+            self.content[3] = .{
                 .id = id,
                 .kind = .leaf,
                 .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
@@ -124,12 +127,21 @@ pub const Demo = struct {
                 } },
                 .hit = .button,
             };
-        };
 
-        self.content[4] = blk: {
+            self.button_infos[0] = .{
+                .id = id,
+                .rect = null,
+                .on_pressed = incrementPressed,
+            };
+        }
+
+        // Setup Reset Button
+
+        {
             const id = Ids.reset;
             const text = "Reset";
-            break :blk .{
+
+            self.content[4] = .{
                 .id = id,
                 .kind = .leaf,
                 .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
@@ -143,8 +155,13 @@ pub const Demo = struct {
                 } },
                 .hit = .button,
             };
-        };
 
+            self.button_infos[1] = .{
+                .id = id,
+                .rect = null,
+                .on_pressed = ResetPressed,
+            };
+        }
         self.card_layers[1] = .{
             .id = Ids.content,
             .kind = .column,
@@ -177,7 +194,7 @@ pub const Demo = struct {
 
     pub fn captureRects(self: *Demo, ui_state: *const UiState) void {
         if (ui_state.findElement(Ids.counter)) |element| self.counter_rect = element.rect;
-        for (&infos) |*info| {
+        for (&self.button_infos) |*info| {
             if (ui_state.findElement(info.id)) |element| info.rect = element.rect;
         }
     }
@@ -206,7 +223,7 @@ pub const Demo = struct {
     }
 
     pub fn onPointerMotion(
-        _: *Demo,
+        self: *Demo,
         ui_state: *UiState,
         point: geo.Point,
         damage: *ow.DamageTracker,
@@ -221,7 +238,7 @@ pub const Demo = struct {
         var dirty = false;
 
         // Check every button that paints hover state. Do not return early inside the loop.
-        for (infos) |info| {
+        for (self.button_infos) |info| {
             if (hoverChanged(old_hover, current, info.id)) {
                 damageRect(damage, info.rect);
                 dirty = true;
@@ -231,6 +248,20 @@ pub const Demo = struct {
         return dirty;
     }
 
+    fn incrementPressed(self: *Demo, info: ButtonInfo, damage: *ow.DamageTracker) void {
+        damageRect(damage, info.rect);
+        self.counter +%= 1;
+        self.refreshCounterText();
+        self.damageCounter(damage);
+    }
+
+    fn ResetPressed(self: *Demo, info: ButtonInfo, damage: *ow.DamageTracker) void {
+        damageRect(damage, info.rect);
+        self.counter = 0;
+        self.refreshCounterText();
+        self.damageCounter(damage);
+    }
+
     pub fn onPointerPress(
         self: *Demo,
         ui_state: *UiState,
@@ -238,28 +269,27 @@ pub const Demo = struct {
         damage: *ow.DamageTracker,
     ) PressResult {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
-        if (press.id.eql(Ids.increment)) {
-            damageRect(damage, infos[0].rect);
-            self.counter +%= 1;
-            self.refreshCounterText();
-            self.damageCounter(damage);
-            return .handled;
+
+        var handled = false;
+
+        for (self.button_infos) |info| {
+            if (press.id.eql(info.id)) {
+                info.on_pressed(self, info, damage);
+                handled = true;
+            }
         }
-        if (press.id.eql(Ids.reset)) {
-            damageRect(damage, infos[1].rect);
-            self.counter = 0;
-            self.refreshCounterText();
-            self.damageCounter(damage);
+        if (handled) {
             return .handled;
+        } else {
+            return .none;
         }
-        return .none;
     }
 
-    pub fn onPointerRelease(_: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
+    pub fn onPointerRelease(self: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
         var dirty = false;
 
         // Check every button that paints hover state. Do not return early inside the loop.
-        for (infos) |info| {
+        for (self.button_infos) |info| {
             const active = ui_state.input.active;
             _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
             const was_active = active.eql(info.id);
