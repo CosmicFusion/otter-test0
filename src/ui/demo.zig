@@ -287,16 +287,10 @@ pub const Demo = struct {
 
     pub fn onPointerRelease(self: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
         var dirty = false;
-
-        // Check every button that paints hover state. Do not return early inside the loop.
         for (self.button_infos) |info| {
-            const active = ui_state.input.active;
             _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
-            const was_active = active.eql(info.id);
-            if (was_active) {
-                damageRect(damage, info.rect);
-                dirty = true;
-            }
+            damageRect(damage, info.rect);
+            dirty = true;
         }
         return dirty;
     }
