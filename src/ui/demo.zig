@@ -286,9 +286,9 @@ pub const Demo = struct {
     }
 
     pub fn onPointerRelease(self: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
+        _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
         var dirty = false;
         for (self.button_infos) |info| {
-            _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
             damageRect(damage, info.rect);
             dirty = true;
         }
@@ -309,12 +309,7 @@ pub const Demo = struct {
 
     fn damageCounter(self: *const Demo, tracker: *ow.DamageTracker) void {
         if (self.counter_rect) |rect| {
-            tracker.addRect(.{
-                .x = rect.x - Ids.damage_pad,
-                .y = rect.y - Ids.damage_pad,
-                .width = @intCast(@max(0, Ids.panel_width - 40)),
-                .height = rect.height + @as(geo.Size, @intCast(Ids.damage_pad * 2)),
-            });
+            tracker.addRect(padded(rect));
         }
     }
 
