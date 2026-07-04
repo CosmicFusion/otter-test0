@@ -57,7 +57,6 @@ const otter_icon_png = @embedFile("../assets/otter-shell-icon.png");
 pub const HoverInfo = struct {
     id: ui.SurfaceId,
     rect: ?geo.Rect,
-    hover_button: bool,
 };
 
 pub const Demo = struct {
@@ -69,7 +68,7 @@ pub const Demo = struct {
     card_layers: [2]ui.SurfaceNode = undefined,
     content: [5]ui.SurfaceNode = undefined,
 
-    pub var hover_infos: [2]HoverInfo = [_]HoverInfo{ HoverInfo{ .id = Ids.increment, .rect = null, .hover_button = false }, HoverInfo{ .id = Ids.reset, .rect = null, .hover_button = false } };
+    pub var infos: [2]HoverInfo = [_]HoverInfo{ HoverInfo{ .id = Ids.increment, .rect = null }, HoverInfo{ .id = Ids.reset, .rect = null } };
 
     pub fn init(self: *Demo, allocator: std.mem.Allocator) !void {
         self.icon = render.Image.loadFromMemory(allocator, otter_icon_png) catch null;
@@ -95,9 +94,6 @@ pub const Demo = struct {
     /// Build the demo card (fixed size). Hover state comes from `ui_state.input`.
     pub fn buildCard(self: *Demo, ui_state: *const UiState, title_text: []const u8) ui.SurfaceNode {
         const theme = theme_mod.Theme{};
-        for (&hover_infos) |*hover_info| {
-            hover_info.hover_button = ui_state.input.hovered.eql(hover_info.id);
-        }
 
         self.content[0] = ui.SurfaceNode.label(Ids.title, title_text, Ids.title_font_size, theme.colors.foreground);
         self.content[0].layout = .{ .width = .fill, .height = .{ .fixed = 24 }, .align_x = .center };
@@ -111,34 +107,42 @@ pub const Demo = struct {
         self.content[2] = ui.SurfaceNode.label(Ids.counter, self.counterSlice(), Ids.body_font_size, theme.colors.muted);
         self.content[2].layout = .{ .width = .fill, .height = .{ .fixed = 22 }, .align_x = .center };
 
-        self.content[3] = .{
-            .id = Ids.increment,
-            .kind = .leaf,
-            .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
-            .content = .{ .button = .{
-                .text = "Increment",
-                .hovered = hover_infos[0].hover_button,
-                .hover_background = theme.surfaces.hover,
-                .pressed_background = theme.surfaces.pressed,
-                .border = theme.surfaces.border_subtle,
-                .radius = theme.spacing.button_border_radius,
-            } },
-            .hit = .button,
+        self.content[3] = blk: {
+            const id = Ids.increment;
+            const text = "Increment";
+            break :blk .{
+                .id = id,
+                .kind = .leaf,
+                .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
+                .content = .{ .button = .{
+                    .text = text,
+                    .hovered = ui_state.input.hovered.eql(id),
+                    .hover_background = theme.surfaces.hover,
+                    .pressed_background = theme.surfaces.pressed,
+                    .border = theme.surfaces.border_subtle,
+                    .radius = theme.spacing.button_border_radius,
+                } },
+                .hit = .button,
+            };
         };
 
-        self.content[4] = .{
-            .id = Ids.reset,
-            .kind = .leaf,
-            .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
-            .content = .{ .button = .{
-                .text = "Reset",
-                .hovered = hover_infos[1].hover_button,
-                .hover_background = theme.surfaces.hover,
-                .pressed_background = theme.surfaces.pressed,
-                .border = theme.surfaces.border_subtle,
-                .radius = theme.spacing.button_border_radius,
-            } },
-            .hit = .button,
+        self.content[4] = blk: {
+            const id = Ids.reset;
+            const text = "Reset";
+            break :blk .{
+                .id = id,
+                .kind = .leaf,
+                .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
+                .content = .{ .button = .{
+                    .text = text,
+                    .hovered = ui_state.input.hovered.eql(id),
+                    .hover_background = theme.surfaces.hover,
+                    .pressed_background = theme.surfaces.pressed,
+                    .border = theme.surfaces.border_subtle,
+                    .radius = theme.spacing.button_border_radius,
+                } },
+                .hit = .button,
+            };
         };
 
         self.card_layers[1] = .{
@@ -173,8 +177,8 @@ pub const Demo = struct {
 
     pub fn captureRects(self: *Demo, ui_state: *const UiState) void {
         if (ui_state.findElement(Ids.counter)) |element| self.counter_rect = element.rect;
-        for (&hover_infos) |*hover_info| {
-            if (ui_state.findElement(hover_info.id)) |element| hover_info.rect = element.rect;
+        for (&infos) |*info| {
+            if (ui_state.findElement(info.id)) |element| info.rect = element.rect;
         }
     }
 
@@ -202,7 +206,7 @@ pub const Demo = struct {
     }
 
     pub fn onPointerMotion(
-        self: *Demo,
+        _: *Demo,
         ui_state: *UiState,
         point: geo.Point,
         damage: *ow.DamageTracker,
@@ -211,18 +215,15 @@ pub const Demo = struct {
         const old_hover = ui_state.input.hovered;
         _ = ui_state.dispatch(.{ .pointer_motion = point });
 
-        //TEMP
-        _ = self;
-
         if (opts.debug_overlay) return true;
 
         const current = ui_state.input.hovered;
         var dirty = false;
 
         // Check every button that paints hover state. Do not return early inside the loop.
-        for (hover_infos) |hover_info| {
-            if (hoverChanged(old_hover, current, hover_info.id)) {
-                damageRect(damage, hover_info.rect);
+        for (infos) |info| {
+            if (hoverChanged(old_hover, current, info.id)) {
+                damageRect(damage, info.rect);
                 dirty = true;
             }
         }
@@ -238,14 +239,14 @@ pub const Demo = struct {
     ) PressResult {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
         if (press.id.eql(Ids.increment)) {
-            damageRect(damage, hover_infos[0].rect);
+            damageRect(damage, infos[0].rect);
             self.counter +%= 1;
             self.refreshCounterText();
             self.damageCounter(damage);
             return .handled;
         }
         if (press.id.eql(Ids.reset)) {
-            damageRect(damage, hover_infos[1].rect);
+            damageRect(damage, infos[1].rect);
             self.counter = 0;
             self.refreshCounterText();
             self.damageCounter(damage);
@@ -254,19 +255,16 @@ pub const Demo = struct {
         return .none;
     }
 
-    pub fn onPointerRelease(self: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
-        _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
-
-        //TEMP
-        _ = self;
-
+    pub fn onPointerRelease(_: *Demo, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
         var dirty = false;
 
         // Check every button that paints hover state. Do not return early inside the loop.
-        for (hover_infos) |hover_info| {
-            const was_active = ui_state.input.active.eql(hover_info.id);
+        for (infos) |info| {
+            const active = ui_state.input.active;
+            _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
+            const was_active = active.eql(info.id);
             if (was_active) {
-                damageRect(damage, hover_info.rect);
+                damageRect(damage, info.rect);
                 dirty = true;
             }
         }
