@@ -9,7 +9,7 @@ const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 
-const demo_mod = @import("../ui/demo.zig");
+const root_mod = @import("../ui/root.zig");
 const draw_mod = @import("../ui/draw.zig");
 const frame_mod = @import("frame.zig");
 
@@ -37,14 +37,14 @@ const App = struct {
     font: ?*render.Font = null,
     text_system: ?render.text.TextSystem = null,
     text_scratch: render.text.ShapeScratch = .{},
-    ui_state: demo_mod.UiState = .{},
+    ui_state: root_mod.UiState = .{},
     damage: ow.DamageTracker = .{},
-    demo: demo_mod.Demo = .{},
+    root: root_mod.Root = .{},
     redraw: frame_mod.Driver = .{},
     theme: theme_mod.Theme = .{},
     pointer: geo.Point = .{ .x = 0, .y = 0 },
-    surface_width: u16 = demo_mod.Ids.panel_width + 48,
-    surface_height: u16 = demo_mod.Ids.panel_height + 48,
+    surface_width: u16 = root_mod.Ids.panel_width + 48,
+    surface_height: u16 = root_mod.Ids.panel_height + 48,
     scale: u31 = 1,
     running: bool = true,
     configured: bool = false,
@@ -76,7 +76,7 @@ const App = struct {
 
         self.theme = theme_mod.Theme{};
         self.font = try render.Font.init(self.allocator, .{ .font_family = self.theme.fonts.font_family });
-        try self.demo.init(self.allocator);
+        try self.root.init(self.allocator);
 
         self.toplevel = try ow.XdgToplevel.createWithOptions(
             &self.conn,
@@ -86,7 +86,7 @@ const App = struct {
             .{ .request_server_side_decorations = self.theme.decorations.server_side },
         );
         self.toplevel.bindListeners();
-        self.toplevel.setMinSize(demo_mod.Ids.panel_width + 32, demo_mod.Ids.panel_height + 32);
+        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32);
         if (self.toplevel.wl_surface) |surface| {
             self.redraw.bind(surface, drawCallback, self);
         }
@@ -96,7 +96,7 @@ const App = struct {
 
     fn deinit(self: *App) void {
         if (self.redraw.frame_callback) |cb| cb.destroy();
-        self.demo.deinit();
+        self.root.deinit();
         if (self.renderer) |r| r.deinit();
         if (self.text_system) |*ts| ts.deinit();
         if (self.font) |f| f.deinit();
@@ -141,14 +141,14 @@ const App = struct {
 
         self.ui_state.setDebugOverlayMode(self.debug_overlay_mode);
         draw_mod.draw(.{
-            .demo = &self.demo,
+            .root = &self.root,
             .ui_state = &self.ui_state,
             .damage = &self.damage,
             .font = font,
             .renderer = renderer,
             .surface = surface,
-            .shell_label = "XDG toplevel demo",
-            .card_placement = .center,
+            .shell_label = "XDG toplevel root",
+            .card_placement = .fill,
             .background = .{ .color = self.theme.colors.background_opaque },
             .text_provider = self.textSystemProvider(),
         });
@@ -158,7 +158,7 @@ const App = struct {
         }
     }
 
-    fn pointerOpts(self: *const App) demo_mod.PointerOpts {
+    fn pointerOpts(self: *const App) root_mod.PointerOpts {
         return .{ .debug_overlay = self.debug_overlay_mode != .off };
     }
 
@@ -219,33 +219,33 @@ fn onSeatAdded(seat: *wl.Seat, _: u32, ctx: ?*anyopaque) void {
 fn onPointerEnter(_: *wl.Surface, point: geo.Point, _: u32, ctx: ?*anyopaque) void {
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     app.pointer = point;
-    if (app.demo.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
+    if (app.root.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
         app.redraw.request();
     }
-    demo_mod.Demo.applyPointerCursor(&app.seat_state, &app.ui_state);
+    root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
 }
 
 fn onPointerMotion(point: geo.Point, ctx: ?*anyopaque) void {
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     app.pointer = point;
-    if (app.demo.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
+    if (app.root.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
         app.redraw.request();
     }
-    demo_mod.Demo.applyPointerCursor(&app.seat_state, &app.ui_state);
+    root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
 }
 
 fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaque) void {
     if (!button.isLeft()) return;
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     if (state == .pressed) {
-        if (app.demo.onPointerPress(&app.ui_state, app.pointer, &app.damage) == .handled) {
+        if (app.root.onPointerPress(&app.ui_state, app.pointer, &app.damage) == .handled) {
             app.redraw.request();
         } else if (app.debug_overlay_mode != .off) {
             app.redraw.request();
         }
         return;
     }
-    if (app.demo.onPointerRelease(&app.ui_state, app.pointer, &app.damage)) {
+    if (app.root.onPointerRelease(&app.ui_state, app.pointer, &app.damage)) {
         app.redraw.request();
     } else if (app.debug_overlay_mode != .off) {
         app.redraw.request();

@@ -5,7 +5,7 @@ const render = @import("otter_render");
 const ui = @import("otter_ui");
 const geo = @import("otter_geo");
 
-const demo_mod = @import("demo.zig");
+const root_mod = @import("root.zig");
 
 const Color = render.Color;
 
@@ -15,14 +15,14 @@ pub const Background = union(enum) {
 };
 
 pub const Frame = struct {
-    demo: *demo_mod.Demo,
-    ui_state: *demo_mod.UiState,
+    root: *root_mod.Root,
+    ui_state: *root_mod.UiState,
     damage: *ow.DamageTracker,
     font: *render.Font,
     renderer: *ow.Renderer,
     surface: *ow.wayland.client.wl.Surface,
     shell_label: []const u8,
-    card_placement: demo_mod.CardPlacement,
+    card_placement: root_mod.CardPlacement,
     background: Background,
     text_provider: ui.TextSystemProvider,
 };
@@ -57,9 +57,9 @@ pub fn draw(frame: Frame) void {
         }
     }
 
-    const card_rect = demo_mod.Demo.cardRect(viewport, frame.card_placement);
-    const root = frame.demo.buildCard(frame.ui_state, frame.shell_label);
-    _ = ui_frame.render(&root, card_rect) catch {};
+    const root_card_rect = root_mod.Root.cardRect(viewport, frame.card_placement);
+    const root = frame.root.buildCard(frame.ui_state, viewport, frame.shell_label);
+    _ = ui_frame.render(&root, root_card_rect) catch {};
     ui_frame.finish() catch {};
 
     if (!effective.full) {
@@ -73,5 +73,5 @@ pub fn draw(frame: Frame) void {
     frame.ui_state.rasterize(&acquired.surface, damage_rects, effective.full);
     frame.renderer.submit(frame.surface, frame.damage);
     frame.damage.commitFrame();
-    frame.demo.captureRects(frame.ui_state);
+    frame.root.captureRects(frame.ui_state);
 }
