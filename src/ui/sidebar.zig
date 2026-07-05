@@ -19,6 +19,7 @@ pub const Ids = struct {
 /// Builds the sidebar's own [panel, content] pair into root.sidebar_layers,
 /// and returns the sidebar's root node (fixed width, fills height).
 pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode {
+    //_ = is_overlay;
     root.sidebar_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
         .background = theme.panelColor(theme.surfaces.surface),
         .border = theme.surfaces.border_subtle,
@@ -42,7 +43,11 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     return .{
         .id = ui.SurfaceId.namedComptime("sidebar.root"),
         .kind = .stack,
-        .layout = .{ .width = .{ .fixed = root.sidebar_width }, .height = .fill },
+        .layout = .{
+            .width = .{ .fixed = root.sidebar_width },
+            .height = .fill,
+            .align_x = .start,
+        },
         .children = root.sidebar_layers[0..2],
     };
 }

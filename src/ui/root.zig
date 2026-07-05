@@ -103,8 +103,8 @@ pub const Root = struct {
         self.main_count = 0;
         const theme = theme_mod.Theme{};
         const wide_mode = viewport.width > self.sidebar_breakpoint;
-        const show_sidebar = wide_mode or self.sidebar_collapsed;
         self.toggle_button_active = !wide_mode;
+        const overlay_sidebar_visible = !wide_mode and self.sidebar_collapsed;
 
         self.card_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
             .background = theme.panelColor(theme.surfaces.surface),
@@ -130,7 +130,6 @@ pub const Root = struct {
             .children = self.card_layers[0..2],
         };
         self.main_count += 1;
-        std.debug.assert(self.main_count <= self.main_children.len);
 
         const main_wrapper_node: ui.SurfaceNode = .{
             .id = Ids.main_wrapper,
@@ -144,19 +143,33 @@ pub const Root = struct {
             .children = self.main_children[0..self.main_count],
         };
 
-        var layout_count: usize = 0;
-        if (show_sidebar) {
+        if (wide_mode) {
+            // Sidebar shares space with main content, side by side.
             self.layout_children[0] = sidebar_mod.buildSidebar(self, theme);
-            layout_count += 1;
+            self.layout_children[1] = main_wrapper_node;
+
+            return .{
+                .id = Ids.layout_root,
+                .kind = .row,
+                .layout = .{ .width = .fill, .height = .fill },
+                .children = self.layout_children[0..2],
+            };
         }
-        self.layout_children[layout_count] = main_wrapper_node;
-        layout_count += 1;
+
+        // Narrow mode: main content always fills the viewport; the sidebar,
+        // if open, floats on top as a fixed-width overlay layer.
+        self.layout_children[0] = main_wrapper_node;
+        var layer_count: usize = 1;
+        if (overlay_sidebar_visible) {
+            self.layout_children[1] = sidebar_mod.buildSidebar(self, theme);
+            layer_count = 2;
+        }
 
         return .{
             .id = Ids.layout_root,
-            .kind = .row,
+            .kind = .stack,
             .layout = .{ .width = .fill, .height = .fill },
-            .children = self.layout_children[0..layout_count],
+            .children = self.layout_children[0..layer_count],
         };
     }
 
