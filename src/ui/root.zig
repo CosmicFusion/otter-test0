@@ -130,6 +130,7 @@ pub const Root = struct {
             .children = self.card_layers[0..2],
         };
         self.main_count += 1;
+        std.debug.assert(self.main_count <= self.main_children.len);
 
         const main_wrapper_node: ui.SurfaceNode = .{
             .id = Ids.main_wrapper,
@@ -197,13 +198,12 @@ pub const Root = struct {
         point: geo.Point,
         damage: *ow.DamageTracker,
     ) PressResult {
-        var handled = false;
+        const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
+        var handled = false;
         var press_handlers: [2]bool = undefined;
-        // Press Events
-        press_handlers[0] = welcome_mod.onPointerPress(self, ui_state, point, damage);
-        press_handlers[1] = sidebar_mod.onPointerPress(self, ui_state, point, damage);
-        // Check all events
+        press_handlers[0] = welcome_mod.checkPress(self, press.id, damage);
+        press_handlers[1] = sidebar_mod.checkPress(self, press.id, damage);
         for (press_handlers) |local_handled| {
             if (local_handled) {
                 handled = true;
@@ -211,20 +211,16 @@ pub const Root = struct {
             }
         }
 
-        if (handled) {
-            return .handled;
-        } else {
-            return .none;
-        }
+        return if (handled) .handled else .none;
     }
 
     pub fn onPointerRelease(self: *Root, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
+        _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
+
         var dirty = false;
         var release_handlers: [2]bool = undefined;
-        // Release Events
-        release_handlers[0] = welcome_mod.onPointerRelease(self, ui_state, point, damage);
-        release_handlers[1] = sidebar_mod.onPointerRelease(self, ui_state, point, damage);
-        // Check all events
+        release_handlers[0] = welcome_mod.checkRelease(self, damage);
+        release_handlers[1] = sidebar_mod.checkRelease(self, damage);
         for (release_handlers) |local_dirty| {
             if (local_dirty) {
                 dirty = true;

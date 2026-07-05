@@ -100,16 +100,11 @@ pub fn checkHover(
     return dirty;
 }
 
-pub fn onPointerPress(
-    root: *root_mod.Root,
-    ui_state: *root_mod.UiState,
-    point: geo.Point,
-    damage: *ow.DamageTracker,
-) bool {
-    const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
+pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId, damage: *ow.DamageTracker) bool {
+    if (!root.toggle_button_active) return false;
 
     for (root.sidebar_button_infos) |info| {
-        if (press.id.eql(info.id)) {
+        if (pressed_id.eql(info.id)) {
             info.on_pressed(root, info, damage);
             return true;
         }
@@ -117,8 +112,9 @@ pub fn onPointerPress(
     return false;
 }
 
-pub fn onPointerRelease(root: *root_mod.Root, ui_state: *root_mod.UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
-    _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
+pub fn checkRelease(root: *root_mod.Root, damage: *ow.DamageTracker) bool {
+    if (!root.toggle_button_active) return false;
+
     var dirty = false;
     for (root.sidebar_button_infos) |info| {
         root_mod.Root.damageRect(damage, info.rect);
