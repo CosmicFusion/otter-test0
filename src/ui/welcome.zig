@@ -63,7 +63,7 @@ pub fn buildWelcomeCard(root: *root_mod.Root, ui_state: *const root_mod.UiState,
             .hit = .button,
         };
 
-        root.button_infos[0] = .{
+        root.welcome_button_infos[0] = .{
             .id = id,
             .rect = null,
             .on_pressed = incrementPressed,
@@ -91,7 +91,7 @@ pub fn buildWelcomeCard(root: *root_mod.Root, ui_state: *const root_mod.UiState,
             .hit = .button,
         };
 
-        root.button_infos[1] = .{
+        root.welcome_button_infos[1] = .{
             .id = id,
             .rect = null,
             .on_pressed = ResetPressed,
@@ -144,37 +144,20 @@ fn damageCounter(root: *const root_mod.Root, tracker: *ow.DamageTracker) void {
     }
 }
 
-pub fn onPointerMotion(
+pub fn checkHover(
     root: *root_mod.Root,
-    ui_state: *root_mod.UiState,
-    point: geo.Point,
+    old_hover: ui.SurfaceId,
+    current: ui.SurfaceId,
     damage: *ow.DamageTracker,
-    opts: root_mod.PointerOpts,
 ) bool {
-    const old_hover = ui_state.input.hovered;
-    _ = ui_state.dispatch(.{ .pointer_motion = point });
-
-    if (opts.debug_overlay) return true;
-
-    const current = ui_state.input.hovered;
     var dirty = false;
-
-    // Check every button that paints hover state. Do not return early inside the loop.
-    for (root.button_infos) |info| {
+    for (root.welcome_button_infos) |info| {
         if (root_mod.Root.hoverChanged(old_hover, current, info.id)) {
             root_mod.Root.damageRect(damage, info.rect);
             dirty = true;
         }
     }
-
     return dirty;
-}
-
-pub fn captureRects(root: *root_mod.Root, ui_state: *const root_mod.UiState) void {
-    if (ui_state.findElement(Ids.counter)) |element| root.counter_rect = element.rect;
-    for (&root.button_infos) |*info| {
-        if (ui_state.findElement(info.id)) |element| info.rect = element.rect;
-    }
 }
 
 pub fn onPointerPress(
@@ -185,7 +168,7 @@ pub fn onPointerPress(
 ) bool {
     const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
-    for (root.button_infos) |info| {
+    for (root.welcome_button_infos) |info| {
         if (press.id.eql(info.id)) {
             info.on_pressed(root, info, damage);
             return true;
@@ -197,9 +180,16 @@ pub fn onPointerPress(
 pub fn onPointerRelease(root: *root_mod.Root, ui_state: *root_mod.UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
     _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
     var dirty = false;
-    for (root.button_infos) |info| {
+    for (root.welcome_button_infos) |info| {
         root_mod.Root.damageRect(damage, info.rect);
         dirty = true;
     }
     return dirty;
+}
+
+pub fn captureRects(root: *root_mod.Root, ui_state: *const root_mod.UiState) void {
+    if (ui_state.findElement(Ids.counter)) |element| root.counter_rect = element.rect;
+    for (&root.welcome_button_infos) |*info| {
+        if (ui_state.findElement(info.id)) |element| info.rect = element.rect;
+    }
 }
