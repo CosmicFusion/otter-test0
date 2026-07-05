@@ -9,23 +9,26 @@ const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 const ow = @import("otter_wayland");
 
-const welcome_mod = @import("welcome.zig");
 const common_mod = @import("common.zig");
+const welcome_mod = @import("welcome.zig");
+const sidebar_mod = @import("sidebar.zig");
 
 const Color = render.Color;
 
 /// Surface IDs and layout numbers for this root. Bump `UiState` bucket sizes when the tree grows.
 pub const Ids = struct {
-    pub const panel_width: u16 = 320;
-    pub const panel_height: u16 = 220;
+    pub const panel_width: u16 = 1400;
+    pub const panel_height: u16 = 900;
     pub const damage_pad: i32 = 6;
 
     pub const card = ui.SurfaceId.namedComptime("root.card");
     pub const panel = ui.SurfaceId.namedComptime("root.panel");
+    pub const layout_root = ui.SurfaceId.namedComptime("root.layout_root");
+    pub const main_wrapper = ui.SurfaceId.namedComptime("root.main_wrapper");
 };
 
 pub const UiState = ui.UiState(.{
-    .elements = 48,
+    .elements = 56,
     .hit_regions = 9,
     .overlays = 1,
     .focus_scopes = 1,
@@ -59,6 +62,11 @@ pub const Root = struct {
     counter_rect: ?geo.Rect = null,
     content: [5]ui.SurfaceNode = undefined,
     button_infos: [2]common_mod.ButtonInfo = undefined,
+    // Sidebar structs
+    sidebar_width: u16 = 200,
+    sidebar_layers: [2]ui.SurfaceNode = undefined,
+    main_children: [1]ui.SurfaceNode = undefined,
+    layout_children: [2]ui.SurfaceNode = undefined,
 
     pub fn init(self: *Root, allocator: std.mem.Allocator) !void {
         // Root init
@@ -87,6 +95,8 @@ pub const Root = struct {
     pub fn buildCard(self: *Root, ui_state: *const UiState, viewport: geo.Rect, title_text: []const u8) ui.SurfaceNode {
         const theme = theme_mod.Theme{};
 
+        const sidebar_node = sidebar_mod.buildSidebar(self, theme);
+
         self.card_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
             .background = theme.panelColor(theme.surfaces.surface),
             .border = theme.surfaces.border_subtle,
@@ -96,14 +106,32 @@ pub const Root = struct {
             .border_width = 1,
         });
 
-        // Welcome build
         welcome_mod.buildWelcomeCard(self, ui_state, theme, viewport, title_text);
 
-        return .{
+        self.main_children[0] = .{
             .id = Ids.card,
             .kind = .stack,
             .layout = .{ .width = .fill, .height = .fill },
             .children = self.card_layers[0..2],
+        };
+
+        self.layout_children[0] = sidebar_node;
+        self.layout_children[1] = .{
+            .id = Ids.main_wrapper,
+            .kind = .column,
+            .layout = .{
+                .width = .fill,
+                .height = .fill,
+                .padding = ui.Padding.uniform(24),
+            },
+            .children = self.main_children[0..1],
+        };
+
+        return .{
+            .id = Ids.layout_root,
+            .kind = .row,
+            .layout = .{ .width = .fill, .height = .fill },
+            .children = self.layout_children[0..2],
         };
     }
 
