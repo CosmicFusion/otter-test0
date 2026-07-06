@@ -7,6 +7,7 @@ const wl = ow.wayland.client.wl;
 const render = @import("otter_render");
 const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
+const utils = @import("otter_utils");
 const geo = @import("otter_geo");
 
 const root_mod = @import("../ui/root.zig");
@@ -42,6 +43,9 @@ const App = struct {
     root: root_mod.Root = .{},
     redraw: frame_mod.Driver = .{},
     theme: theme_mod.Theme = .{},
+    theme_path_buf: [std.fs.max_path_bytes]u8 = undefined,
+    theme_path_len: usize = 0,
+    theme_mtime_ns: ?i128 = null,
     pointer: geo.Point = .{ .x = 0, .y = 0 },
     surface_width: u16 = root_mod.Ids.panel_width + 48,
     surface_height: u16 = root_mod.Ids.panel_height + 48,
@@ -74,7 +78,8 @@ const App = struct {
         self.seat_state.cursor_shape_manager = self.conn.cursor_shape_manager;
         try self.conn.roundtrip();
 
-        self.theme = theme_mod.Theme{};
+        self.theme = theme_mod.loadTheme(self.allocator);
+        self.initThemeReload();
         self.font = try render.Font.init(self.allocator, .{ .font_family = self.theme.fonts.font_family });
         try self.root.init(self.allocator);
 
@@ -109,7 +114,8 @@ const App = struct {
 
         while (self.running) {
             _ = self.conn.display.flush();
-            const nfds = try posix.poll(&pollfds, -1);
+            const nfds = try posix.poll(&pollfds, 500);
+            self.reloadThemeIfChanged();
             if (nfds == 0) continue;
             if (pollfds[0].revents & posix.POLL.IN != 0) {
                 if (self.conn.dispatch() == error.WaylandDispatchFailed) break;
@@ -128,6 +134,32 @@ const App = struct {
             self.surface_height,
             self.toplevel.scale,
         );
+    }
+
+    fn initThemeReload(self: *App) void {
+        const path = theme_mod.getThemeConfigPath(&self.theme_path_buf) orelse return;
+        self.theme_path_len = path.len;
+        self.theme_mtime_ns = themeStamp(path);
+    }
+
+    fn reloadThemeIfChanged(self: *App) void {
+        if (self.theme_path_len == 0) return;
+        const path = self.theme_path_buf[0..self.theme_path_len];
+        const mtime_ns = themeStamp(path) orelse return;
+        if (self.theme_mtime_ns != null and self.theme_mtime_ns.? == mtime_ns) return;
+
+        const new_theme = theme_mod.loadTheme(self.allocator);
+        const new_font = render.Font.init(self.allocator, .{ .font_family = new_theme.fonts.font_family }) catch return;
+
+        if (self.text_system) |*ts| {
+            ts.deinit();
+            self.text_system = null;
+        }
+        if (self.font) |f| f.deinit();
+        self.font = new_font;
+        self.theme = new_theme;
+        self.theme_mtime_ns = mtime_ns;
+        requestFullRedraw(self);
     }
 
     fn draw(self: *App) void {
@@ -150,6 +182,7 @@ const App = struct {
             .shell_label = "XDG toplevel root",
             .card_placement = .fill,
             .background = .{ .color = self.theme.colors.background_opaque },
+            .theme = self.theme,
             .text_provider = self.textSystemProvider(),
         });
 
@@ -220,8 +253,10 @@ fn onSeatAdded(seat: *wl.Seat, _: u32, ctx: ?*anyopaque) void {
 fn onPointerEnter(_: *wl.Surface, point: geo.Point, _: u32, ctx: ?*anyopaque) void {
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     app.pointer = point;
-    if (app.root.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
-        app.redraw.request();
+    const old_hover = app.ui_state.input.hovered;
+    const old_active = app.ui_state.input.active;
+    if (app.root.onPointerMotion(&app.ui_state, point, app.pointerOpts())) {
+        requestInputRedraw(app, old_hover, old_active);
     }
     root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
 }
@@ -229,8 +264,10 @@ fn onPointerEnter(_: *wl.Surface, point: geo.Point, _: u32, ctx: ?*anyopaque) vo
 fn onPointerMotion(point: geo.Point, ctx: ?*anyopaque) void {
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     app.pointer = point;
-    if (app.root.onPointerMotion(&app.ui_state, point, &app.damage, app.pointerOpts())) {
-        app.redraw.request();
+    const old_hover = app.ui_state.input.hovered;
+    const old_active = app.ui_state.input.active;
+    if (app.root.onPointerMotion(&app.ui_state, point, app.pointerOpts())) {
+        requestInputRedraw(app, old_hover, old_active);
     }
     root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
 }
@@ -239,18 +276,76 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     if (!button.isLeft()) return;
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
     if (state == .pressed) {
-        if (app.root.onPointerPress(&app.ui_state, app.pointer, &app.damage) == .handled) {
-            app.redraw.request();
-        } else if (app.debug_overlay_mode != .off) {
-            app.redraw.request();
+        const old_hover = app.ui_state.input.hovered;
+        const old_active = app.ui_state.input.active;
+        switch (app.root.onPointerPress(&app.ui_state, app.pointer)) {
+            .sidebar => {
+                damageInputChange(app, old_hover, old_active);
+                damageSidebar(app);
+                app.redraw.request();
+            },
+            .damage => |id| {
+                damageInputChange(app, old_hover, old_active);
+                damageSurface(app, id);
+                app.redraw.request();
+            },
+            .input => requestInputRedraw(app, old_hover, old_active),
+            .none => if (app.debug_overlay_mode != .off) app.redraw.request(),
         }
         return;
     }
-    if (app.root.onPointerRelease(&app.ui_state, app.pointer, &app.damage)) {
-        app.redraw.request();
+    const old_hover = app.ui_state.input.hovered;
+    const old_active = app.ui_state.input.active;
+    if (app.root.onPointerRelease(&app.ui_state, app.pointer)) {
+        requestInputRedraw(app, old_hover, old_active);
     } else if (app.debug_overlay_mode != .off) {
         app.redraw.request();
     }
+}
+
+fn requestFullRedraw(app: *App) void {
+    app.damage.markFullDamage();
+    app.redraw.request();
+}
+
+fn requestInputRedraw(app: *App, old_hover: ui.SurfaceId, old_active: ui.SurfaceId) void {
+    if (app.debug_overlay_mode != .off) {
+        requestFullRedraw(app);
+        return;
+    }
+    damageInputChange(app, old_hover, old_active);
+    app.redraw.request();
+}
+
+fn damageInputChange(app: *App, old_hover: ui.SurfaceId, old_active: ui.SurfaceId) void {
+    damageSurface(app, old_hover);
+    damageSurface(app, app.ui_state.input.hovered);
+    damageSurface(app, old_active);
+    damageSurface(app, app.ui_state.input.active);
+}
+
+fn damageSurface(app: *App, id: ui.SurfaceId) void {
+    if (id.eql(ui.SurfaceId.none)) return;
+    const element = app.ui_state.findElement(id) orelse {
+        app.damage.markFullDamage();
+        return;
+    };
+    app.damage.addRect(element.rect);
+}
+
+fn damageSidebar(app: *App) void {
+    const width: geo.Size = @min(app.surface_width, app.root.sidebar_width);
+    app.damage.addRect(.{
+        .x = 0,
+        .y = 0,
+        .width = width,
+        .height = app.surface_height,
+    });
+}
+
+fn themeStamp(path: []const u8) ?i128 {
+    const stat = std.Io.Dir.cwd().statFile(utils.io.get(), path, .{}) catch return null;
+    return @as(i128, stat.mtime.nanoseconds);
 }
 
 fn onKey(keysym: u32, _: []const u8, state: ow.KeyState, mods: ow.keyboard.Modifiers, ctx: ?*anyopaque) void {

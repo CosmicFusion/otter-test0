@@ -1,4 +1,4 @@
-//! Root card: state, IDs, SD tree, pointer handling, damage helpers.
+//! Root card: state, IDs, SD tree, pointer handling.
 //!
 //! **Add a button:** define a node in `buildCard()` and handle its id in `onPointerPress()`.
 
@@ -14,13 +14,10 @@ const welcome_mod = @import("welcome.zig");
 const sidebar_mod = @import("sidebar.zig");
 const top_controls_mod = @import("top_controls.zig");
 
-const Color = render.Color;
-
 /// Surface IDs and layout numbers for this root. Bump `UiState` bucket sizes when the tree grows.
 pub const Ids = struct {
     pub const panel_width: u16 = 400;
     pub const panel_height: u16 = 500;
-    pub const damage_pad: i32 = 6;
 
     pub const card = ui.SurfaceId.namedComptime("root.card");
     pub const panel = ui.SurfaceId.namedComptime("root.panel");
@@ -44,7 +41,12 @@ pub const CardPlacement = enum {
     center,
 };
 
-pub const PressResult = enum { none, handled };
+pub const PressResult = union(enum) {
+    none,
+    input,
+    damage: ui.SurfaceId,
+    sidebar,
+};
 
 pub const PointerOpts = struct {
     debug_overlay: bool = false,
@@ -61,7 +63,6 @@ pub const Root = struct {
     counter_text: [48]u8 = undefined,
     counter_text_len: usize = 0,
     icon: ?render.Image = null,
-    counter_rect: ?geo.Rect = null,
     content: [5]ui.SurfaceNode = undefined,
     welcome_button_infos: [2]common_mod.ButtonInfo = undefined,
     // Sidebar structs
@@ -102,23 +103,22 @@ pub const Root = struct {
     }
 
     /// Build the root card (fixed size). Hover state comes from `ui_state.input`.
-    pub fn buildCard(self: *Root, ui_state: *const UiState, viewport: geo.Rect, title_text: []const u8) ui.SurfaceNode {
+    pub fn buildCard(self: *Root, viewport: geo.Rect, title_text: []const u8, theme: theme_mod.Theme) ui.SurfaceNode {
         self.main_count = 0;
-        const theme = theme_mod.Theme{};
         const wide_mode = viewport.width > self.sidebar_breakpoint;
         self.toggle_button_shown = !wide_mode;
 
         self.card_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
             .background = theme.panelColor(theme.surfaces.surface),
             .border = theme.surfaces.border_subtle,
-            .shadow = Color.init(0, 0, 0, 72),
-            .highlight_edge = Color.init(255, 255, 255, 12),
+            .shadow = theme.surfaces.shadow,
+            .highlight_edge = theme.surfaces.highlight_edge,
             .radius = theme.popup.border_radius,
             .border_width = 1,
         });
 
-        top_controls_mod.buildTopControls(self, ui_state, theme);
-        welcome_mod.buildWelcomeCard(self, ui_state, theme, viewport, title_text);
+        top_controls_mod.buildTopControls(self);
+        welcome_mod.buildWelcomeCard(self, theme, viewport, title_text);
 
         self.main_children[self.main_count] = .{
             .id = Ids.card,
@@ -165,10 +165,9 @@ pub const Root = struct {
         };
     }
 
-    pub fn queueOverlays(self: *Root, frame: anytype, viewport: geo.Rect) void {
+    pub fn queueOverlays(self: *Root, frame: anytype, viewport: geo.Rect, theme: theme_mod.Theme) void {
         if (viewport.width > self.sidebar_breakpoint or !self.sidebar_visible) return;
 
-        const theme = theme_mod.Theme{};
         self.sidebar_overlay = sidebar_mod.buildSidebar(self, theme);
         frame.queueOverlay(.{
             .id = sidebar_mod.Ids.root,
@@ -187,78 +186,50 @@ pub const Root = struct {
         }) catch {};
     }
 
-    pub fn captureRects(self: *Root, ui_state: *const UiState) void {
-        welcome_mod.captureRects(self, ui_state);
-        top_controls_mod.captureRects(self, ui_state);
-        sidebar_mod.captureRects(self, ui_state);
-    }
-
     pub fn onPointerMotion(
         self: *Root,
         ui_state: *UiState,
         point: geo.Point,
-        damage: *ow.DamageTracker,
         opts: PointerOpts,
     ) bool {
+        _ = self;
         const old_hover = ui_state.input.hovered;
         _ = ui_state.dispatch(.{ .pointer_motion = point });
-
         if (opts.debug_overlay) return true;
-
-        const current = ui_state.input.hovered;
-
-        var dirty = false;
-        var motion_handlers: [3]bool = undefined;
-        motion_handlers[0] = top_controls_mod.checkHover(self, old_hover, current, damage);
-        motion_handlers[1] = welcome_mod.checkHover(self, old_hover, current, damage);
-        motion_handlers[2] = sidebar_mod.checkHover(self, old_hover, current, damage);
-        for (motion_handlers) |local_dirty| {
-            if (local_dirty) {
-                dirty = true;
-                break;
-            }
-        }
-        return dirty;
+        return !old_hover.eql(ui_state.input.hovered);
     }
 
     pub fn onPointerPress(
         self: *Root,
         ui_state: *UiState,
         point: geo.Point,
-        damage: *ow.DamageTracker,
     ) PressResult {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
-        var handled = false;
-        var press_handlers: [3]bool = undefined;
-        press_handlers[0] = top_controls_mod.checkPress(self, press.id, damage);
-        press_handlers[1] = welcome_mod.checkPress(self, press.id, damage);
-        press_handlers[2] = sidebar_mod.checkPress(self, press.id, damage);
-        for (press_handlers) |local_handled| {
-            if (local_handled) {
-                handled = true;
-                break;
+        var result: PressResult = if (press.id.eql(ui.SurfaceId.none)) .none else .input;
+        var press_handlers: [3]PressResult = undefined;
+        press_handlers[0] = top_controls_mod.checkPress(self, press.id);
+        press_handlers[1] = welcome_mod.checkPress(self, press.id);
+        press_handlers[2] = sidebar_mod.checkPress(self, press.id);
+        for (press_handlers) |local_result| {
+            switch (local_result) {
+                .sidebar => return .sidebar,
+                .damage => |id| result = .{ .damage = id },
+                .input => {
+                    if (std.meta.activeTag(result) == .none) result = .input;
+                },
+                .none => {},
             }
         }
 
-        return if (handled) .handled else .none;
+        return result;
     }
 
-    pub fn onPointerRelease(self: *Root, ui_state: *UiState, point: geo.Point, damage: *ow.DamageTracker) bool {
+    pub fn onPointerRelease(self: *Root, ui_state: *UiState, point: geo.Point) bool {
+        _ = self;
+        const active = ui_state.input.active;
         _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
-
-        var dirty = false;
-        var release_handlers: [3]bool = undefined;
-        release_handlers[0] = top_controls_mod.checkRelease(self, damage);
-        release_handlers[1] = welcome_mod.checkRelease(self, damage);
-        release_handlers[2] = sidebar_mod.checkRelease(self, damage);
-        for (release_handlers) |local_dirty| {
-            if (local_dirty) {
-                dirty = true;
-                break;
-            }
-        }
-        return dirty;
+        return !active.eql(ui.SurfaceId.none);
     }
 
     pub fn applyPointerCursor(seat_state: *ow.SeatState, ui_state: *const UiState) void {
@@ -274,22 +245,5 @@ pub const Root = struct {
             .button, .icon_button => .pointer,
             else => .default,
         });
-    }
-
-    pub fn hoverChanged(old: ui.SurfaceId, current: ui.SurfaceId, id: ui.SurfaceId) bool {
-        return old.eql(id) != current.eql(id);
-    }
-
-    pub fn damageRect(tracker: *ow.DamageTracker, rect: ?geo.Rect) void {
-        if (rect) |r| tracker.addRect(padded(r));
-    }
-
-    pub fn padded(rect: geo.Rect) geo.Rect {
-        return .{
-            .x = rect.x - Ids.damage_pad,
-            .y = rect.y - Ids.damage_pad,
-            .width = rect.width + @as(geo.Size, @intCast(Ids.damage_pad * 2)),
-            .height = rect.height + @as(geo.Size, @intCast(Ids.damage_pad * 2)),
-        };
     }
 };

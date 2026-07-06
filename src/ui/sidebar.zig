@@ -2,7 +2,6 @@
 
 const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
-const ow = @import("otter_wayland");
 
 const root_mod = @import("root.zig");
 
@@ -49,33 +48,8 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     };
 }
 
-pub fn checkHover(
-    root: *root_mod.Root,
-    old_hover: ui.SurfaceId,
-    current: ui.SurfaceId,
-    damage: *ow.DamageTracker,
-) bool {
-    _ = root;
-    _ = old_hover;
-    _ = current;
-    _ = damage;
-    return false;
-}
-
-pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId, damage: *ow.DamageTracker) bool {
+pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId) root_mod.PressResult {
     _ = root;
     _ = pressed_id;
-    _ = damage;
-    return false;
-}
-
-pub fn checkRelease(root: *root_mod.Root, damage: *ow.DamageTracker) bool {
-    _ = root;
-    _ = damage;
-    return false;
-}
-
-pub fn captureRects(root: *root_mod.Root, ui_state: *const root_mod.UiState) void {
-    _ = root;
-    _ = ui_state;
+    return .none;
 }
