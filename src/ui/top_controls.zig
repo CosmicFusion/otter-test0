@@ -79,7 +79,6 @@ fn helloPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.D
     _ = root;
     root_mod.Root.damageRect(damage, info.rect);
     std.debug.print("hello\n", .{});
-    damage.markFullDamage();
 }
 
 fn toggleSidebarPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.DamageTracker) void {
