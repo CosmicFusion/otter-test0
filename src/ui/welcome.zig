@@ -94,7 +94,7 @@ pub fn buildWelcomeCard(root: *root_mod.Root, ui_state: *const root_mod.UiState,
         root.welcome_button_infos[1] = .{
             .id = id,
             .rect = null,
-            .on_pressed = ResetPressed,
+            .on_pressed = resetPressed,
         };
     }
 
@@ -119,7 +119,7 @@ fn incrementPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *
     damageCounter(root, damage);
 }
 
-fn ResetPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.DamageTracker) void {
+fn resetPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.DamageTracker) void {
     root_mod.Root.damageRect(damage, info.rect);
     root.counter = 0;
     refreshCounterText(root);

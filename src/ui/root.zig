@@ -28,8 +28,8 @@ pub const Ids = struct {
 };
 
 pub const UiState = ui.UiState(.{
-    .elements = 56,
-    .hit_regions = 9,
+    .elements = 200,
+    .hit_regions = 10,
     .overlays = 1,
     .focus_scopes = 1,
     .scroll_states = 0,
@@ -67,7 +67,7 @@ pub const Root = struct {
     sidebar_breakpoint: u16 = 1000,
     sidebar_width: u16 = 200,
     sidebar_layers: [2]ui.SurfaceNode = undefined,
-    sidebar_collapsed: bool = false,
+    sidebar_visible: bool = false,
     sidebar_button_infos: [1]common_mod.ButtonInfo = undefined,
     // Sidebar toggle structs
     toggle_button_active: bool = false,
@@ -104,7 +104,7 @@ pub const Root = struct {
         const theme = theme_mod.Theme{};
         const wide_mode = viewport.width > self.sidebar_breakpoint;
         self.toggle_button_active = !wide_mode;
-        const overlay_sidebar_visible = !wide_mode and self.sidebar_collapsed;
+        const overlay_sidebar_visible = !wide_mode and self.sidebar_visible;
 
         self.card_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
             .background = theme.panelColor(theme.surfaces.surface),
@@ -120,7 +120,7 @@ pub const Root = struct {
         // Toggle button only exists below the breakpoint — above it, the
         // sidebar is forced on and there's nothing to toggle.
         if (self.toggle_button_active) {
-            sidebar_mod.BuildSidebarToggle(self, ui_state, theme);
+            sidebar_mod.buildSidebarToggle(self, ui_state, theme);
         }
 
         self.main_children[self.main_count] = .{

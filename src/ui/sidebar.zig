@@ -52,9 +52,9 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     };
 }
 
-pub fn BuildSidebarToggle(root: *root_mod.Root, ui_state: *const root_mod.UiState, theme: theme_mod.Theme) void {
+pub fn buildSidebarToggle(root: *root_mod.Root, ui_state: *const root_mod.UiState, theme: theme_mod.Theme) void {
     const id = Ids.toggle_sidebar;
-    const text = if (root.sidebar_collapsed) "Hide Sidebar" else "Show Sidebar";
+    const text = if (root.sidebar_visible) "Hide Sidebar" else "Show Sidebar";
 
     root.main_children[root.main_count] = .{
         .id = id,
@@ -82,7 +82,7 @@ pub fn BuildSidebarToggle(root: *root_mod.Root, ui_state: *const root_mod.UiStat
 
 fn toggleSidebarPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.DamageTracker) void {
     root_mod.Root.damageRect(damage, info.rect);
-    root.sidebar_collapsed = !root.sidebar_collapsed;
+    root.sidebar_visible = !root.sidebar_visible;
     // The whole row reflows (main card's width, everything's position)
     // — cheaper and safer to redraw everything than to hand-compute
     // every rect that shifted.
