@@ -60,6 +60,7 @@ pub fn draw(frame: Frame) void {
     const root_card_rect = root_mod.Root.cardRect(viewport, frame.card_placement);
     const root = frame.root.buildCard(frame.ui_state, viewport, frame.shell_label);
     _ = ui_frame.render(&root, root_card_rect) catch {};
+    frame.root.queueOverlays(&ui_frame, viewport);
     ui_frame.finish() catch {};
 
     if (!effective.full) {

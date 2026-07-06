@@ -200,10 +200,11 @@ fn onConfigure(width: u31, height: u31, _: ow.XdgToplevelState, ctx: ?*anyopaque
         if (app.toplevel.wl_surface) |surface| {
             surface.setBufferScale(@intCast(app.toplevel.scale));
         }
-        app.damage.markFullDamage();
-        app.redraw.drawNow();
-        if (app.toplevel.wl_surface) |surface| surface.commit();
     }
+
+    app.damage.markFullDamage();
+    app.redraw.drawNow();
+    if (app.toplevel.wl_surface) |surface| surface.commit();
 }
 
 fn onClose(ctx: ?*anyopaque) void {

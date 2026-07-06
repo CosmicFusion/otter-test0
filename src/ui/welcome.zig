@@ -138,7 +138,7 @@ fn refreshCounterText(root: *root_mod.Root) void {
     root.counter_text_len = written.len;
 }
 
-fn damageCounter(root: *const root_mod.Root, tracker: *ow.DamageTracker) void {
+pub fn damageCounter(root: *const root_mod.Root, tracker: *ow.DamageTracker) void {
     if (root.counter_rect) |rect| {
         tracker.addRect(root_mod.Root.padded(rect));
     }

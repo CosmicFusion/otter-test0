@@ -2,18 +2,15 @@
 
 const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
-const geo = @import("otter_geo");
 const ow = @import("otter_wayland");
 
 const root_mod = @import("root.zig");
-const common_mod = @import("common.zig");
 
 pub const Ids = struct {
     // Sidebar
+    pub const root = ui.SurfaceId.namedComptime("sidebar.root");
     pub const panel = ui.SurfaceId.namedComptime("sidebar.panel");
     pub const content = ui.SurfaceId.namedComptime("sidebar.content");
-    // Sidebar toggle
-    pub const toggle_sidebar = ui.SurfaceId.namedComptime("root.toggle_sidebar");
 };
 
 /// Builds the sidebar's own [panel, content] pair into root.sidebar_layers,
@@ -41,7 +38,7 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     };
 
     return .{
-        .id = ui.SurfaceId.namedComptime("sidebar.root"),
+        .id = Ids.root,
         .kind = .stack,
         .layout = .{
             .width = .{ .fixed = root.sidebar_width },
@@ -52,84 +49,33 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     };
 }
 
-pub fn buildSidebarToggle(root: *root_mod.Root, ui_state: *const root_mod.UiState, theme: theme_mod.Theme) void {
-    const id = Ids.toggle_sidebar;
-    const text = if (root.sidebar_visible) "Hide Sidebar" else "Show Sidebar";
-
-    root.main_children[root.main_count] = .{
-        .id = id,
-        .kind = .leaf,
-        .layout = .{ .width = .fit, .height = .fit, .align_x = .center },
-        .content = .{ .button = .{
-            .text = text,
-            .hovered = ui_state.input.hovered.eql(id),
-            .hover_background = theme.surfaces.hover,
-            .pressed_background = theme.surfaces.pressed,
-            .border = theme.surfaces.border_subtle,
-            .radius = theme.spacing.button_border_radius,
-        } },
-        .hit = .button,
-    };
-
-    root.sidebar_button_infos[0] = .{
-        .id = id,
-        .rect = null,
-        .on_pressed = toggleSidebarPressed,
-    };
-
-    root.main_count += 1;
-}
-
-fn toggleSidebarPressed(root: *root_mod.Root, info: common_mod.ButtonInfo, damage: *ow.DamageTracker) void {
-    root_mod.Root.damageRect(damage, info.rect);
-    root.sidebar_visible = !root.sidebar_visible;
-    // The whole row reflows (main card's width, everything's position)
-    // — cheaper and safer to redraw everything than to hand-compute
-    // every rect that shifted.
-    damage.markFullDamage();
-}
-
 pub fn checkHover(
     root: *root_mod.Root,
     old_hover: ui.SurfaceId,
     current: ui.SurfaceId,
     damage: *ow.DamageTracker,
 ) bool {
-    var dirty = false;
-    for (root.sidebar_button_infos) |info| {
-        if (root_mod.Root.hoverChanged(old_hover, current, info.id)) {
-            root_mod.Root.damageRect(damage, info.rect);
-            dirty = true;
-        }
-    }
-    return dirty;
+    _ = root;
+    _ = old_hover;
+    _ = current;
+    _ = damage;
+    return false;
 }
 
 pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId, damage: *ow.DamageTracker) bool {
-    if (!root.toggle_button_active) return false;
-
-    for (root.sidebar_button_infos) |info| {
-        if (pressed_id.eql(info.id)) {
-            info.on_pressed(root, info, damage);
-            return true;
-        }
-    }
+    _ = root;
+    _ = pressed_id;
+    _ = damage;
     return false;
 }
 
 pub fn checkRelease(root: *root_mod.Root, damage: *ow.DamageTracker) bool {
-    if (!root.toggle_button_active) return false;
-
-    var dirty = false;
-    for (root.sidebar_button_infos) |info| {
-        root_mod.Root.damageRect(damage, info.rect);
-        dirty = true;
-    }
-    return dirty;
+    _ = root;
+    _ = damage;
+    return false;
 }
 
 pub fn captureRects(root: *root_mod.Root, ui_state: *const root_mod.UiState) void {
-    for (&root.sidebar_button_infos) |*info| {
-        if (ui_state.findElement(info.id)) |element| info.rect = element.rect;
-    }
+    _ = root;
+    _ = ui_state;
 }

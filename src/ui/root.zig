@@ -12,6 +12,7 @@ const ow = @import("otter_wayland");
 const common_mod = @import("common.zig");
 const welcome_mod = @import("welcome.zig");
 const sidebar_mod = @import("sidebar.zig");
+const top_controls_mod = @import("top_controls.zig");
 
 const Color = render.Color;
 
@@ -28,8 +29,8 @@ pub const Ids = struct {
 };
 
 pub const UiState = ui.UiState(.{
-    .elements = 200,
-    .hit_regions = 10,
+    .elements = 32,
+    .hit_regions = 8,
     .overlays = 1,
     .focus_scopes = 1,
     .scroll_states = 0,
@@ -67,10 +68,12 @@ pub const Root = struct {
     sidebar_breakpoint: u16 = 1000,
     sidebar_width: u16 = 200,
     sidebar_layers: [2]ui.SurfaceNode = undefined,
+    sidebar_overlay: ui.SurfaceNode = undefined,
     sidebar_visible: bool = false,
-    sidebar_button_infos: [1]common_mod.ButtonInfo = undefined,
-    // Sidebar toggle structs
-    toggle_button_active: bool = false,
+    // Top controls structs
+    toggle_button_shown: bool = false,
+    top_controls: [2]ui.SurfaceNode = undefined,
+    top_button_infos: [2]common_mod.ButtonInfo = undefined,
     //
     main_children: [2]ui.SurfaceNode = undefined,
     layout_children: [2]ui.SurfaceNode = undefined,
@@ -103,8 +106,7 @@ pub const Root = struct {
         self.main_count = 0;
         const theme = theme_mod.Theme{};
         const wide_mode = viewport.width > self.sidebar_breakpoint;
-        self.toggle_button_active = !wide_mode;
-        const overlay_sidebar_visible = !wide_mode and self.sidebar_visible;
+        self.toggle_button_shown = !wide_mode;
 
         self.card_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
             .background = theme.panelColor(theme.surfaces.surface),
@@ -115,13 +117,8 @@ pub const Root = struct {
             .border_width = 1,
         });
 
+        top_controls_mod.buildTopControls(self, ui_state, theme);
         welcome_mod.buildWelcomeCard(self, ui_state, theme, viewport, title_text);
-
-        // Toggle button only exists below the breakpoint — above it, the
-        // sidebar is forced on and there's nothing to toggle.
-        if (self.toggle_button_active) {
-            sidebar_mod.buildSidebarToggle(self, ui_state, theme);
-        }
 
         self.main_children[self.main_count] = .{
             .id = Ids.card,
@@ -156,25 +153,43 @@ pub const Root = struct {
             };
         }
 
-        // Narrow mode: main content always fills the viewport; the sidebar,
-        // if open, floats on top as a fixed-width overlay layer.
+        // Narrow mode: main content always fills the viewport. Floating
+        // surfaces are queued through UiFrame overlays after layout.
         self.layout_children[0] = main_wrapper_node;
-        var layer_count: usize = 1;
-        if (overlay_sidebar_visible) {
-            self.layout_children[1] = sidebar_mod.buildSidebar(self, theme);
-            layer_count = 2;
-        }
 
         return .{
             .id = Ids.layout_root,
             .kind = .stack,
             .layout = .{ .width = .fill, .height = .fill },
-            .children = self.layout_children[0..layer_count],
+            .children = self.layout_children[0..1],
         };
+    }
+
+    pub fn queueOverlays(self: *Root, frame: anytype, viewport: geo.Rect) void {
+        if (viewport.width > self.sidebar_breakpoint or !self.sidebar_visible) return;
+
+        const theme = theme_mod.Theme{};
+        self.sidebar_overlay = sidebar_mod.buildSidebar(self, theme);
+        frame.queueOverlay(.{
+            .id = sidebar_mod.Ids.root,
+            .anchor = .{ .rect = .{
+                .x = 0,
+                .y = 0,
+                .width = 0,
+                .height = viewport.height,
+            } },
+            .placement = .end,
+            .size = .{
+                .x = @intCast(self.sidebar_width),
+                .y = @intCast(viewport.height),
+            },
+            .node = &self.sidebar_overlay,
+        }) catch {};
     }
 
     pub fn captureRects(self: *Root, ui_state: *const UiState) void {
         welcome_mod.captureRects(self, ui_state);
+        top_controls_mod.captureRects(self, ui_state);
         sidebar_mod.captureRects(self, ui_state);
     }
 
@@ -193,9 +208,10 @@ pub const Root = struct {
         const current = ui_state.input.hovered;
 
         var dirty = false;
-        var motion_handlers: [2]bool = undefined;
-        motion_handlers[0] = welcome_mod.checkHover(self, old_hover, current, damage);
-        motion_handlers[1] = sidebar_mod.checkHover(self, old_hover, current, damage);
+        var motion_handlers: [3]bool = undefined;
+        motion_handlers[0] = top_controls_mod.checkHover(self, old_hover, current, damage);
+        motion_handlers[1] = welcome_mod.checkHover(self, old_hover, current, damage);
+        motion_handlers[2] = sidebar_mod.checkHover(self, old_hover, current, damage);
         for (motion_handlers) |local_dirty| {
             if (local_dirty) {
                 dirty = true;
@@ -214,9 +230,10 @@ pub const Root = struct {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
         var handled = false;
-        var press_handlers: [2]bool = undefined;
-        press_handlers[0] = welcome_mod.checkPress(self, press.id, damage);
-        press_handlers[1] = sidebar_mod.checkPress(self, press.id, damage);
+        var press_handlers: [3]bool = undefined;
+        press_handlers[0] = top_controls_mod.checkPress(self, press.id, damage);
+        press_handlers[1] = welcome_mod.checkPress(self, press.id, damage);
+        press_handlers[2] = sidebar_mod.checkPress(self, press.id, damage);
         for (press_handlers) |local_handled| {
             if (local_handled) {
                 handled = true;
@@ -231,9 +248,10 @@ pub const Root = struct {
         _ = ui_state.dispatch(.{ .button_release = .{ .point = point, .button = 1 } });
 
         var dirty = false;
-        var release_handlers: [2]bool = undefined;
-        release_handlers[0] = welcome_mod.checkRelease(self, damage);
-        release_handlers[1] = sidebar_mod.checkRelease(self, damage);
+        var release_handlers: [3]bool = undefined;
+        release_handlers[0] = top_controls_mod.checkRelease(self, damage);
+        release_handlers[1] = welcome_mod.checkRelease(self, damage);
+        release_handlers[2] = sidebar_mod.checkRelease(self, damage);
         for (release_handlers) |local_dirty| {
             if (local_dirty) {
                 dirty = true;
