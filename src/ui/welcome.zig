@@ -4,8 +4,7 @@ const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 
-const root_mod = @import("root.zig");
-const common_mod = @import("common.zig");
+const types = @import("ui_types.zig");
 
 pub const Ids = struct {
     pub const icon_size: u16 = 48;
@@ -20,11 +19,11 @@ pub const Ids = struct {
     pub const reset = ui.SurfaceId.namedComptime("root.reset");
 };
 
-pub fn init(root: *root_mod.Root) !void {
+pub fn init(root: anytype) !void {
     refreshCounterText(root);
 }
 
-pub fn buildWelcomeCard(root: *root_mod.Root, theme: theme_mod.Theme, viewport: geo.Rect, title_text: []const u8) void {
+pub fn buildWelcomeCard(root: anytype, theme: theme_mod.Theme, viewport: geo.Rect, title_text: []const u8) void {
     _ = viewport;
 
     root.content[0] = ui.SurfaceNode.label(Ids.title, title_text, Ids.title_font_size, theme.colors.foreground);
@@ -53,10 +52,6 @@ pub fn buildWelcomeCard(root: *root_mod.Root, theme: theme_mod.Theme, viewport: 
             .hit = .button,
         };
 
-        root.welcome_button_infos[0] = .{
-            .id = id,
-            .on_pressed = incrementPressed,
-        };
     }
 
     // Setup Reset Button
@@ -73,10 +68,6 @@ pub fn buildWelcomeCard(root: *root_mod.Root, theme: theme_mod.Theme, viewport: 
             .hit = .button,
         };
 
-        root.welcome_button_infos[1] = .{
-            .id = id,
-            .on_pressed = resetPressed,
-        };
     }
 
     root.card_layers[1] = .{
@@ -93,23 +84,23 @@ pub fn buildWelcomeCard(root: *root_mod.Root, theme: theme_mod.Theme, viewport: 
     };
 }
 
-fn incrementPressed(root: *root_mod.Root) root_mod.PressResult {
+fn incrementPressed(root: anytype) types.PressResult {
     root.counter +%= 1;
     refreshCounterText(root);
     return .{ .damage = Ids.counter };
 }
 
-fn resetPressed(root: *root_mod.Root) root_mod.PressResult {
+fn resetPressed(root: anytype) types.PressResult {
     root.counter = 0;
     refreshCounterText(root);
     return .{ .damage = Ids.counter };
 }
 
-fn counterSlice(root: *const root_mod.Root) []const u8 {
+fn counterSlice(root: anytype) []const u8 {
     return root.counter_text[0..root.counter_text_len];
 }
 
-fn refreshCounterText(root: *root_mod.Root) void {
+fn refreshCounterText(root: anytype) void {
     const written = std.fmt.bufPrint(root.counter_text[0..], "Clicked {d} time{s}", .{
         root.counter,
         if (root.counter == 1) "" else "s",
@@ -117,11 +108,8 @@ fn refreshCounterText(root: *root_mod.Root) void {
     root.counter_text_len = written.len;
 }
 
-pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId) root_mod.PressResult {
-    for (root.welcome_button_infos) |info| {
-        if (pressed_id.eql(info.id)) {
-            return info.on_pressed(root);
-        }
-    }
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+    if (pressed_id.eql(Ids.increment)) return incrementPressed(root);
+    if (pressed_id.eql(Ids.reset)) return resetPressed(root);
     return .none;
 }

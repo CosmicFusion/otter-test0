@@ -3,7 +3,7 @@
 const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 
-const root_mod = @import("root.zig");
+const types = @import("ui_types.zig");
 
 pub const Ids = struct {
     // Sidebar
@@ -14,7 +14,7 @@ pub const Ids = struct {
 
 /// Builds the sidebar's own [panel, content] pair into root.sidebar_layers,
 /// and returns the sidebar's root node (fixed width, fills height).
-pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode {
+pub fn buildSidebar(root: anytype, theme: theme_mod.Theme) ui.SurfaceNode {
     //_ = is_overlay;
     root.sidebar_layers[0] = ui.SurfaceNode.panel(Ids.panel, .{ .width = .fill, .height = .fill }, .{
         .background = theme.panelColor(theme.surfaces.surface),
@@ -48,7 +48,7 @@ pub fn buildSidebar(root: *root_mod.Root, theme: theme_mod.Theme) ui.SurfaceNode
     };
 }
 
-pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId) root_mod.PressResult {
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
     _ = root;
     _ = pressed_id;
     return .none;

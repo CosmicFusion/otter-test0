@@ -9,19 +9,26 @@ const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 const ow = @import("otter_wayland");
 
-const common_mod = @import("common.zig");
 const welcome_mod = @import("welcome.zig");
 const sidebar_mod = @import("sidebar.zig");
 const top_controls_mod = @import("top_controls.zig");
+const csd_mod = @import("csd.zig");
+const types = @import("ui_types.zig");
+
+// TEMP till decoration is in otter lib
+pub const Decoration = types.Decoration;
 
 /// Surface IDs and layout numbers for this root. Bump `UiState` bucket sizes when the tree grows.
 pub const Ids = struct {
     pub const panel_width: u16 = 400;
     pub const panel_height: u16 = 500;
+    // Temp until it's setting in otter
+    pub const decoration: Decoration = .server;
 
     pub const card = ui.SurfaceId.namedComptime("root.card");
     pub const panel = ui.SurfaceId.namedComptime("root.panel");
     pub const layout_root = ui.SurfaceId.namedComptime("root.layout_root");
+    pub const window_root = ui.SurfaceId.namedComptime("root.window_root");
     pub const main_wrapper = ui.SurfaceId.namedComptime("root.main_wrapper");
 };
 
@@ -41,16 +48,9 @@ pub const CardPlacement = enum {
     center,
 };
 
-pub const PressResult = union(enum) {
-    none,
-    input,
-    damage: ui.SurfaceId,
-    sidebar,
-};
-
-pub const PointerOpts = struct {
-    debug_overlay: bool = false,
-};
+pub const PressResult = types.PressResult;
+pub const CsdAction = types.CsdAction;
+pub const PointerOpts = types.PointerOpts;
 
 pub const otter_icon_png = @embedFile("../assets/otter-shell-icon.png");
 
@@ -64,7 +64,6 @@ pub const Root = struct {
     counter_text_len: usize = 0,
     icon: ?render.Image = null,
     content: [5]ui.SurfaceNode = undefined,
-    welcome_button_infos: [2]common_mod.ButtonInfo = undefined,
     // Sidebar structs
     sidebar_breakpoint: u16 = 1000,
     sidebar_width: u16 = 200,
@@ -74,8 +73,12 @@ pub const Root = struct {
     // Top controls structs
     toggle_button_shown: bool = false,
     top_controls: [2]ui.SurfaceNode = undefined,
-    top_button_infos: [2]common_mod.ButtonInfo = undefined,
+    // CSD structs
+    window_children_count: usize = 0,
+    titlebar_layers: [2]ui.SurfaceNode = undefined,
+    titlebar_children: [4]ui.SurfaceNode = undefined,
     //
+    window_children: [2]ui.SurfaceNode = undefined,
     main_children: [2]ui.SurfaceNode = undefined,
     layout_children: [2]ui.SurfaceNode = undefined,
 
@@ -105,6 +108,7 @@ pub const Root = struct {
     /// Build the root card (fixed size). Hover state comes from `ui_state.input`.
     pub fn buildCard(self: *Root, viewport: geo.Rect, title_text: []const u8, theme: theme_mod.Theme) ui.SurfaceNode {
         self.main_count = 0;
+        self.window_children_count = 0;
         const wide_mode = viewport.width > self.sidebar_breakpoint;
         self.toggle_button_shown = !wide_mode;
 
@@ -117,6 +121,9 @@ pub const Root = struct {
             .border_width = 1,
         });
 
+        if (Ids.decoration == .client) {
+            csd_mod.buildTitlebar(self, "test", theme, false);
+        }
         top_controls_mod.buildTopControls(self);
         welcome_mod.buildWelcomeCard(self, theme, viewport, title_text);
 
@@ -145,23 +152,30 @@ pub const Root = struct {
             self.layout_children[0] = sidebar_mod.buildSidebar(self, theme);
             self.layout_children[1] = main_wrapper_node;
 
-            return .{
+            self.window_children[self.window_children_count] = .{
                 .id = Ids.layout_root,
                 .kind = .row,
                 .layout = .{ .width = .fill, .height = .fill },
                 .children = self.layout_children[0..2],
             };
+        } else {
+            // Narrow mode: main content always fills the viewport. Floating
+            // surfaces are queued through UiFrame overlays after layout.
+            self.layout_children[0] = main_wrapper_node;
+
+            self.window_children[self.window_children_count] = .{
+                .id = Ids.layout_root,
+                .kind = .stack,
+                .layout = .{ .width = .fill, .height = .fill },
+                .children = self.layout_children[0..1],
+            };
         }
 
-        // Narrow mode: main content always fills the viewport. Floating
-        // surfaces are queued through UiFrame overlays after layout.
-        self.layout_children[0] = main_wrapper_node;
-
         return .{
-            .id = Ids.layout_root,
-            .kind = .stack,
+            .id = Ids.window_root,
+            .kind = .column,
             .layout = .{ .width = .fill, .height = .fill },
-            .children = self.layout_children[0..1],
+            .children = self.window_children[0 .. self.window_children_count + 1],
         };
     }
 
@@ -207,22 +221,21 @@ pub const Root = struct {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
         var result: PressResult = if (press.id.eql(ui.SurfaceId.none)) .none else .input;
-        var press_handlers: [3]PressResult = undefined;
-        press_handlers[0] = top_controls_mod.checkPress(self, press.id);
-        press_handlers[1] = welcome_mod.checkPress(self, press.id);
-        press_handlers[2] = sidebar_mod.checkPress(self, press.id);
-        for (press_handlers) |local_result| {
-            switch (local_result) {
-                .sidebar => return .sidebar,
-                .damage => |id| result = .{ .damage = id },
-                .input => {
-                    if (std.meta.activeTag(result) == .none) result = .input;
-                },
-                .none => {},
-            }
-        }
-
+        result = mergePressResult(result, top_controls_mod.checkPress(self, press.id));
+        result = mergePressResult(result, welcome_mod.checkPress(self, press.id));
+        result = mergePressResult(result, sidebar_mod.checkPress(self, press.id));
+        result = mergePressResult(result, csd_mod.checkPress(self, press.id));
         return result;
+    }
+
+    fn mergePressResult(current: PressResult, local: PressResult) PressResult {
+        return switch (local) {
+            .sidebar => .sidebar,
+            .damage => |id| .{ .damage = id },
+            .csd => |action| .{ .csd = action },
+            .input => if (std.meta.activeTag(current) == .none) .input else current,
+            .none => current,
+        };
     }
 
     pub fn onPointerRelease(self: *Root, ui_state: *UiState, point: geo.Point) bool {

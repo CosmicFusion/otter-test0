@@ -3,8 +3,7 @@
 const std = @import("std");
 const ui = @import("otter_ui");
 
-const root_mod = @import("root.zig");
-const common_mod = @import("common.zig");
+const types = @import("ui_types.zig");
 
 pub const Ids = struct {
     pub const content = ui.SurfaceId.namedComptime("top_controls.content");
@@ -12,7 +11,7 @@ pub const Ids = struct {
     pub const toggle_sidebar = ui.SurfaceId.namedComptime("top_controls.toggle_sidebar");
 };
 
-pub fn buildTopControls(root: *root_mod.Root) void {
+pub fn buildTopControls(root: anytype) void {
     root.top_controls[0] = buildHelloButton(root);
     root.top_controls[1] = buildSidebarToggle(root);
 
@@ -22,13 +21,9 @@ pub fn buildTopControls(root: *root_mod.Root) void {
     root.main_count += 1;
 }
 
-fn buildHelloButton(root: *root_mod.Root) ui.SurfaceNode {
+fn buildHelloButton(root: anytype) ui.SurfaceNode {
     const id = Ids.hello;
-
-    root.top_button_infos[0] = .{
-        .id = id,
-        .on_pressed = helloPressed,
-    };
+    _ = root;
 
     return .{
         .id = id,
@@ -39,14 +34,9 @@ fn buildHelloButton(root: *root_mod.Root) ui.SurfaceNode {
     };
 }
 
-fn buildSidebarToggle(root: *root_mod.Root) ui.SurfaceNode {
+fn buildSidebarToggle(root: anytype) ui.SurfaceNode {
     const id = Ids.toggle_sidebar;
     const text = if (root.sidebar_visible) "Hide Sidebar" else "Show Sidebar";
-
-    root.top_button_infos[1] = .{
-        .id = id,
-        .on_pressed = toggleSidebarPressed,
-    };
 
     return .{
         .id = id,
@@ -57,22 +47,19 @@ fn buildSidebarToggle(root: *root_mod.Root) ui.SurfaceNode {
     };
 }
 
-fn helloPressed(root: *root_mod.Root) root_mod.PressResult {
+fn helloPressed(root: anytype) types.PressResult {
     _ = root;
     std.debug.print("hello\n", .{});
     return .input;
 }
 
-fn toggleSidebarPressed(root: *root_mod.Root) root_mod.PressResult {
+fn toggleSidebarPressed(root: anytype) types.PressResult {
     root.sidebar_visible = !root.sidebar_visible;
     return .sidebar;
 }
 
-pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId) root_mod.PressResult {
-    for (root.top_button_infos) |info| {
-        if (pressed_id.eql(info.id)) {
-            return info.on_pressed(root);
-        }
-    }
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+    if (pressed_id.eql(Ids.hello)) return helloPressed(root);
+    if (pressed_id.eql(Ids.toggle_sidebar)) return toggleSidebarPressed(root);
     return .none;
 }
