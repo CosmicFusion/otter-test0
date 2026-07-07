@@ -13,6 +13,9 @@ const geo = @import("otter_geo");
 const root_mod = @import("../ui/root.zig");
 const draw_mod = @import("../ui/draw.zig");
 const frame_mod = @import("frame.zig");
+const csd_mod = @import("csd.zig");
+
+const enable_csd = true;
 
 pub const Options = struct {
     debug_overlay_mode: ui.DebugOverlayMode = .off,
@@ -41,6 +44,7 @@ const App = struct {
     ui_state: root_mod.UiState = .{},
     damage: ow.DamageTracker = .{},
     root: root_mod.Root = .{},
+    csd: csd_mod.Chrome = .{},
     redraw: frame_mod.Driver = .{},
     theme: theme_mod.Theme = .{},
     theme_path_buf: [std.fs.max_path_bytes]u8 = undefined,
@@ -88,10 +92,10 @@ const App = struct {
             "Otter Examples",
             "otter-examples",
             .{ .on_configure = onConfigure, .on_close = onClose, .context = self },
-            .{ .request_server_side_decorations = self.theme.decorations.server_side },
+            .{ .request_server_side_decorations = if (enable_csd) false else self.theme.decorations.server_side },
         );
         self.toplevel.bindListeners();
-        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32);
+        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32 + if (enable_csd) csd_mod.titlebar_height else 0);
         if (self.toplevel.wl_surface) |surface| {
             self.redraw.bind(surface, drawCallback, self);
         }
@@ -184,6 +188,8 @@ const App = struct {
             .background = .{ .color = self.theme.colors.background_opaque },
             .theme = self.theme,
             .text_provider = self.textSystemProvider(),
+            .csd = if (enable_csd) &self.csd else null,
+            .maximized = self.toplevel.current_state.maximized,
         });
 
         if (self.ui_state.debugOverlayMode() == .metrics) {
@@ -193,6 +199,15 @@ const App = struct {
 
     fn pointerOpts(self: *const App) root_mod.PointerOpts {
         return .{ .debug_overlay = self.debug_overlay_mode != .off };
+    }
+
+    fn viewport(self: *const App) geo.Rect {
+        return .{
+            .x = 0,
+            .y = 0,
+            .width = self.surface_width,
+            .height = self.surface_height,
+        };
     }
 
     fn textSystemProvider(self: *App) ui.TextSystemProvider {
@@ -255,10 +270,15 @@ fn onPointerEnter(_: *wl.Surface, point: geo.Point, _: u32, ctx: ?*anyopaque) vo
     app.pointer = point;
     const old_hover = app.ui_state.input.hovered;
     const old_active = app.ui_state.input.active;
+    if (updateCsdHover(app, point)) {
+        requestInputRedraw(app, old_hover, old_active);
+        applyPointerCursor(app);
+        return;
+    }
     if (app.root.onPointerMotion(&app.ui_state, point, app.pointerOpts())) {
         requestInputRedraw(app, old_hover, old_active);
     }
-    root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
+    applyPointerCursor(app);
 }
 
 fn onPointerMotion(point: geo.Point, ctx: ?*anyopaque) void {
@@ -266,10 +286,15 @@ fn onPointerMotion(point: geo.Point, ctx: ?*anyopaque) void {
     app.pointer = point;
     const old_hover = app.ui_state.input.hovered;
     const old_active = app.ui_state.input.active;
+    if (updateCsdHover(app, point)) {
+        requestInputRedraw(app, old_hover, old_active);
+        applyPointerCursor(app);
+        return;
+    }
     if (app.root.onPointerMotion(&app.ui_state, point, app.pointerOpts())) {
         requestInputRedraw(app, old_hover, old_active);
     }
-    root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
+    applyPointerCursor(app);
 }
 
 fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaque) void {
@@ -278,6 +303,44 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     if (state == .pressed) {
         const old_hover = app.ui_state.input.hovered;
         const old_active = app.ui_state.input.active;
+        if (enable_csd) {
+            std.debug.print("fuck {} \n", .{csdPress(app)});
+            switch (csdPress(app)) {
+                .content => {},
+                .move => {
+                    if (app.toplevel.xdg_toplevel) |toplevel| {
+                        if (app.seat_state.seat) |seat| toplevel.move(seat, app.seat_state.last_button_serial);
+                    }
+                    return;
+                },
+                .close => {
+                    app.running = false;
+                    return;
+                },
+                .minimize => {
+                    if (app.toplevel.xdg_toplevel) |toplevel| toplevel.setMinimized();
+                    requestInputRedraw(app, old_hover, old_active);
+                    return;
+                },
+                .maximize => {
+                    if (app.toplevel.xdg_toplevel) |toplevel| {
+                        if (app.toplevel.current_state.maximized) {
+                            toplevel.unsetMaximized();
+                        } else {
+                            toplevel.setMaximized();
+                        }
+                    }
+                    requestInputRedraw(app, old_hover, old_active);
+                    return;
+                },
+                .resize => |edge| {
+                    if (app.toplevel.xdg_toplevel) |toplevel| {
+                        if (app.seat_state.seat) |seat| toplevel.resize(seat, app.seat_state.last_button_serial, xdgResizeEdge(edge));
+                    }
+                    return;
+                },
+            }
+        }
         switch (app.root.onPointerPress(&app.ui_state, app.pointer)) {
             .sidebar => {
                 damageInputChange(app, old_hover, old_active);
@@ -296,6 +359,14 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     }
     const old_hover = app.ui_state.input.hovered;
     const old_active = app.ui_state.input.active;
+    if (enable_csd) {
+        const active_was_csd = csd_mod.ownsId(app.ui_state.input.active);
+        const released_csd = csdRelease(app);
+        if (active_was_csd or released_csd) {
+            requestInputRedraw(app, old_hover, old_active);
+            return;
+        }
+    }
     if (app.root.onPointerRelease(&app.ui_state, app.pointer)) {
         requestInputRedraw(app, old_hover, old_active);
     } else if (app.debug_overlay_mode != .off) {
@@ -341,6 +412,95 @@ fn damageSidebar(app: *App) void {
         .width = width,
         .height = app.surface_height,
     });
+}
+
+fn applyPointerCursor(app: *App) void {
+    if (enable_csd) {
+        const viewport = app.viewport();
+        switch (app.csd.hit(app.pointer, viewport)) {
+            .content => {},
+            .resize => {
+                if (app.csd.resizeCursor(app.pointer, viewport)) |edge| {
+                    app.seat_state.setCursorShape(resizeCursorShape(edge));
+                }
+                return;
+            },
+            else => {
+                if (app.ui_state.hitTest(app.pointer)) |hit_region| {
+                    if (hit_region.kind == .button or hit_region.kind == .icon_button) {
+                        app.seat_state.setCursorShape(.pointer);
+                        return;
+                    }
+                }
+                app.seat_state.setCursorShape(.default);
+                return;
+            },
+        }
+    }
+    root_mod.Root.applyPointerCursor(&app.seat_state, &app.ui_state);
+}
+
+fn updateCsdHover(app: *App, point: geo.Point) bool {
+    if (!enable_csd) return false;
+    switch (app.csd.hit(point, app.viewport())) {
+        .content => return false,
+        else => {
+            const old_hover = app.ui_state.input.hovered;
+            _ = app.ui_state.dispatch(.{ .pointer_motion = point });
+            return !old_hover.eql(app.ui_state.input.hovered);
+        },
+    }
+}
+
+fn csdPress(app: *App) csd_mod.PressResult {
+    switch (app.csd.hit(app.pointer, app.viewport())) {
+        .content => return .content,
+        .resize => |edge| return .{ .resize = edge },
+        .titlebar, .button => {},
+    }
+
+    const press_result = app.ui_state.dispatch(.{ .button_press = .{ .point = app.pointer, .button = 1 } });
+    if (press_result.id.eql(csd_mod.Ids.close)) return .close;
+    if (press_result.id.eql(csd_mod.Ids.minimize)) return .minimize;
+    if (press_result.id.eql(csd_mod.Ids.maximize)) return .maximize;
+    return .move;
+}
+
+fn csdRelease(app: *App) bool {
+    switch (app.csd.hit(app.pointer, app.viewport())) {
+        .content => return false,
+        else => {
+            const old_active = app.ui_state.input.active;
+            _ = app.ui_state.dispatch(.{ .button_release = .{ .point = app.pointer, .button = 1 } });
+            return !old_active.eql(ui.SurfaceId.none);
+        },
+    }
+}
+
+fn xdgResizeEdge(edge: csd_mod.Edge) ow.wayland.client.xdg.Toplevel.ResizeEdge {
+    return switch (edge) {
+        .top => .top,
+        .bottom => .bottom,
+        .left => .left,
+        .right => .right,
+        .top_left => .top_left,
+        .top_right => .top_right,
+        .bottom_left => .bottom_left,
+        .bottom_right => .bottom_right,
+    };
+}
+
+fn resizeCursorShape(edge: csd_mod.Edge) ow.wayland.client.wp.CursorShapeDeviceV1.Shape {
+    return switch (edge) {
+        .top => .n_resize,
+        .bottom => .s_resize,
+        .left => .w_resize,
+        .right => .e_resize,
+        .top_left => .nw_resize,
+        .top_right => .ne_resize,
+        .bottom_left => .sw_resize,
+        .bottom_right => .se_resize,
+    };
 }
 
 fn themeStamp(path: []const u8) ?i128 {

@@ -26,8 +26,8 @@ pub const Ids = struct {
 };
 
 pub const UiState = ui.UiState(.{
-    .elements = 32,
-    .hit_regions = 8,
+    .elements = 48,
+    .hit_regions = 16,
     .overlays = 1,
     .focus_scopes = 1,
     .scroll_states = 0,

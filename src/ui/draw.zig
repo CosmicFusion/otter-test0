@@ -7,6 +7,7 @@ const geo = @import("otter_geo");
 const theme_mod = @import("otter_theme");
 
 const root_mod = @import("root.zig");
+const csd_mod = @import("../shell/csd.zig");
 
 const Color = render.Color;
 
@@ -27,6 +28,8 @@ pub const Frame = struct {
     background: Background,
     theme: theme_mod.Theme,
     text_provider: ui.TextSystemProvider,
+    csd: ?*csd_mod.Chrome = null,
+    maximized: bool = false,
 };
 
 pub fn draw(frame: Frame) void {
@@ -62,10 +65,16 @@ pub fn draw(frame: Frame) void {
         }
     }
 
-    const root_card_rect = root_mod.Root.cardRect(viewport, frame.card_placement);
-    const root = frame.root.buildCard(viewport, frame.shell_label, frame.theme);
+    const content_viewport = if (frame.csd) |csd| blk: {
+        const titlebar = csd.buildTitlebar("Otter Examples", frame.theme, frame.maximized);
+        _ = ui_frame.render(&titlebar, csd_mod.Chrome.titlebarRect(viewport)) catch {};
+        break :blk csd_mod.Chrome.contentRect(viewport);
+    } else viewport;
+
+    const root_card_rect = root_mod.Root.cardRect(content_viewport, frame.card_placement);
+    const root = frame.root.buildCard(content_viewport, frame.shell_label, frame.theme);
     _ = ui_frame.render(&root, root_card_rect) catch {};
-    frame.root.queueOverlays(&ui_frame, viewport, frame.theme);
+    frame.root.queueOverlays(&ui_frame, content_viewport, frame.theme);
     ui_frame.finish() catch {};
 
     if (!effective.full) {
