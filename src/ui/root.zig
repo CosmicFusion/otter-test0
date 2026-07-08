@@ -31,8 +31,8 @@ pub const Ids = struct {
 };
 
 pub const UiState = ui.UiState(.{
-    .elements = 48,
-    .hit_regions = 16,
+    .elements = 80,
+    .hit_regions = 26,
     .overlays = 1,
     .focus_scopes = 1,
     .scroll_states = 0,
@@ -73,8 +73,15 @@ pub const Root = struct {
     top_controls: [2]ui.SurfaceNode = undefined,
     // CSD structs
     window_children_count: usize = 0,
-    titlebar_layers: [2]ui.SurfaceNode = undefined,
-    titlebar_children: [4]ui.SurfaceNode = undefined,
+    maximize_ids: [10]ui.SurfaceId = undefined,
+    maximize_ids_count: usize = 0,
+    minimize_ids: [10]ui.SurfaceId = undefined,
+    minimize_ids_count: usize = 0,
+    close_ids: [10]ui.SurfaceId = undefined,
+    close_ids_count: usize = 0,
+    titlebar_layers: [4]ui.SurfaceNode = undefined,
+    titlebar_children_start: [3]ui.SurfaceNode = undefined,
+    titlebar_children_end: [3]ui.SurfaceNode = undefined,
     //
     window_children: [2]ui.SurfaceNode = undefined,
     main_children: [2]ui.SurfaceNode = undefined,
