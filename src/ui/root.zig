@@ -119,7 +119,7 @@ pub const Root = struct {
             .border_width = 1,
         });
 
-        if (theme.decorations.prefered_decoration_type == .client or (theme.decorations.prefered_decoration_type == .client_minimized) and !maximized) {
+        if (theme.decorations.prefered_decoration_type == .client or (theme.decorations.prefered_decoration_type == .client_floating) and !maximized) {
             csd_mod.buildTitlebar(self, Ids.app_name, theme, maximized);
         }
         top_controls_mod.buildTopControls(self);

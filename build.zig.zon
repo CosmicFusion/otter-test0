@@ -4,29 +4,26 @@
     .fingerprint = 0x36d57dd5f41df13a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .otter_utils = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-utils.git#v0.11.34",
-            .hash = "otter_utils-0.11.34-DYWsuzmFAQD9lrs8mT8WVjpSQwnwJKknOjNTiPGdVfmq",
-        },
         .otter_geo = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-geo.git#v0.11.34",
-            .hash = "otter_geo-0.11.34-_BK9GRdsAAByzBlFpbARLTRBxG4m85cNl3KajpqWi3h_",
+            .path = "../otter-geo",
         },
         .otter_render = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-render.git#v0.11.34",
-            .hash = "otter_render-0.11.34-nsNKUj2RIgD8BiK40dMM7ziVe_eLkICh2_YdSOyHgoZ1",
+            .path = "../otter-render",
+        },
+        .otter_conf = .{
+            .path = "../otter-conf",
+        },
+        .otter_utils = .{
+            .path = "../otter-utils",
         },
         .otter_theme = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-theme.git#v0.11.34",
-            .hash = "otter_theme-0.11.34-YqawRlAHAQCGEPKnJRLT9HwLLyHxVSdrv-t3baJIMowV",
+            .path = "../otter-theme",
         },
         .otter_wayland = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-wayland.git#v0.11.34",
-            .hash = "otter_wayland-0.11.34-BgbeyG1PEQDjg44z0W1VdDO3jg8DISJ04cquYEWXio5e",
+            .path = "../otter-wayland",
         },
         .otter_ui = .{
-            .url = "git+https://git.pika-os.com/otter-shell/otter-ui.git#v0.11.34",
-            .hash = "otter_ui-0.11.34-dHO2H7AWRQAbXp3xpixmFTPaKvP7N1D36bPHB2YOruUm",
+            .path = "../otter-ui",
         },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src", "assets", "README.md", "docs" },
