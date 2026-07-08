@@ -304,7 +304,7 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     if (state == .pressed) {
         const old_hover = app.ui_state.input.hovered;
         const old_active = app.ui_state.input.active;
-        if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_minimized and !app.maximized)) {
+        if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_minimized and !app.toplevel.current_state.maximized)) {
             switch (app.csd.hit(app.pointer, app.viewport())) {
                 .resize => |edge| {
                     performCsdAction(app, .{ .resize = edge });
@@ -376,7 +376,7 @@ fn performCsdAction(app: *App, action: xdg_csd_mod.CsdAction) void {
 }
 
 fn applyPointerCursor(app: *App) void {
-    if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_minimized and !app.maximized)) {
+    if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_minimized and !app.toplevel.current_state.maximized)) {
         if (app.csd.resizeCursor(app.pointer, app.viewport())) |edge| {
             app.seat_state.setCursorShape(xdg_csd_mod.resizeCursorShape(edge));
             return;
