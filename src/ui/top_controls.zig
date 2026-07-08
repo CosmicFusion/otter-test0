@@ -3,7 +3,7 @@
 const std = @import("std");
 const ui = @import("otter_ui");
 
-const types = @import("ui_types.zig");
+const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 pub const Ids = struct {
     pub const content = ui.SurfaceId.namedComptime("top_controls.content");
@@ -47,18 +47,18 @@ fn buildSidebarToggle(root: anytype) ui.SurfaceNode {
     };
 }
 
-fn helloPressed(root: anytype) types.PressResult {
+fn helloPressed(root: anytype) xdg_app_mod.PressResult {
     _ = root;
     std.debug.print("hello\n", .{});
     return .input;
 }
 
-fn toggleSidebarPressed(root: anytype) types.PressResult {
+fn toggleSidebarPressed(root: anytype) xdg_app_mod.PressResult {
     root.sidebar_visible = !root.sidebar_visible;
     return .sidebar;
 }
 
-pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
     if (pressed_id.eql(Ids.hello)) return helloPressed(root);
     if (pressed_id.eql(Ids.toggle_sidebar)) return toggleSidebarPressed(root);
     return .none;

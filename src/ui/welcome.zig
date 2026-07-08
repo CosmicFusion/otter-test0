@@ -4,7 +4,7 @@ const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 
-const types = @import("ui_types.zig");
+const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 pub const Ids = struct {
     pub const icon_size: u16 = 48;
@@ -51,7 +51,6 @@ pub fn buildWelcomeCard(root: anytype, theme: theme_mod.Theme, viewport: geo.Rec
             .content = .{ .button = .{ .text = text } },
             .hit = .button,
         };
-
     }
 
     // Setup Reset Button
@@ -67,7 +66,6 @@ pub fn buildWelcomeCard(root: anytype, theme: theme_mod.Theme, viewport: geo.Rec
             .content = .{ .button = .{ .text = text } },
             .hit = .button,
         };
-
     }
 
     root.card_layers[1] = .{
@@ -84,13 +82,13 @@ pub fn buildWelcomeCard(root: anytype, theme: theme_mod.Theme, viewport: geo.Rec
     };
 }
 
-fn incrementPressed(root: anytype) types.PressResult {
+fn incrementPressed(root: anytype) xdg_app_mod.PressResult {
     root.counter +%= 1;
     refreshCounterText(root);
     return .{ .damage = Ids.counter };
 }
 
-fn resetPressed(root: anytype) types.PressResult {
+fn resetPressed(root: anytype) xdg_app_mod.PressResult {
     root.counter = 0;
     refreshCounterText(root);
     return .{ .damage = Ids.counter };
@@ -108,7 +106,7 @@ fn refreshCounterText(root: anytype) void {
     root.counter_text_len = written.len;
 }
 
-pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
     if (pressed_id.eql(Ids.increment)) return incrementPressed(root);
     if (pressed_id.eql(Ids.reset)) return resetPressed(root);
     return .none;

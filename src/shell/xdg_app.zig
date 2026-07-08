@@ -20,6 +20,14 @@ pub const Options = struct {
     debug_overlay_mode: ui.DebugOverlayMode = .off,
 };
 
+pub const PressResult = union(enum) {
+    none,
+    input,
+    damage: ui.SurfaceId,
+    sidebar,
+    csd: xdg_csd_mod.CsdAction,
+};
+
 pub fn run(allocator: std.mem.Allocator, options: Options) !void {
     var app = App{
         .allocator = allocator,
@@ -52,8 +60,7 @@ pub const App = struct {
     pointer: geo.Point = .{ .x = 0, .y = 0 },
     surface_width: u16 = root_mod.Ids.panel_width + 48,
     surface_height: u16 = root_mod.Ids.panel_height + 48,
-    // TODO: Put This in otter libs
-    decoration: root_mod.Decoration = root_mod.Ids.decoration,
+    prefered_decoration_type: theme_mod.Theme.DecorationTypes = undefined,
     scale: u31 = 1,
     running: bool = true,
     configured: bool = false,
@@ -87,19 +94,20 @@ pub const App = struct {
         self.initThemeReload();
         self.font = try render.Font.init(self.allocator, .{ .font_family = self.theme.fonts.font_family });
         try self.root.init(self.allocator);
-        const request_server_side_decorations = switch (self.decoration) {
+        self.prefered_decoration_type = self.theme.decorations.prefered_decoration_type;
+        const request_server_side_decorations = switch (self.prefered_decoration_type) {
             .server => true,
             else => false,
         };
         self.toplevel = try ow.XdgToplevel.createWithOptions(
             &self.conn,
-            "Otter Examples",
-            "otter-examples",
+            root_mod.Ids.app_name,
+            root_mod.Ids.app_id,
             .{ .on_configure = onConfigure, .on_close = onClose, .context = self },
             .{ .request_server_side_decorations = request_server_side_decorations },
         );
         self.toplevel.bindListeners();
-        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32 + if (self.decoration == .client) csd_mod.Ids.titlebar_height else 0);
+        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32 + if (self.prefered_decoration_type == .client) csd_mod.Ids.titlebar_height else 0);
         if (self.toplevel.wl_surface) |surface| {
             self.redraw.bind(surface, drawCallback, self);
         }
@@ -296,7 +304,7 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     if (state == .pressed) {
         const old_hover = app.ui_state.input.hovered;
         const old_active = app.ui_state.input.active;
-        if (app.decoration == .client) {
+        if (app.prefered_decoration_type == .client) {
             switch (app.csd.hit(app.pointer, app.viewport())) {
                 .resize => |edge| {
                     performCsdAction(app, .{ .resize = edge });
@@ -335,7 +343,7 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
     }
 }
 
-fn performCsdAction(app: *App, action: root_mod.CsdAction) void {
+fn performCsdAction(app: *App, action: xdg_csd_mod.CsdAction) void {
     switch (action) {
         .close => app.running = false,
         .move => {
@@ -368,7 +376,7 @@ fn performCsdAction(app: *App, action: root_mod.CsdAction) void {
 }
 
 fn applyPointerCursor(app: *App) void {
-    if (app.decoration == .client) {
+    if (app.prefered_decoration_type == .client) {
         if (app.csd.resizeCursor(app.pointer, app.viewport())) |edge| {
             app.seat_state.setCursorShape(xdg_csd_mod.resizeCursorShape(edge));
             return;

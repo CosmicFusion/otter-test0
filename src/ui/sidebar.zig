@@ -3,7 +3,7 @@
 const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 
-const types = @import("ui_types.zig");
+const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 pub const Ids = struct {
     // Sidebar
@@ -48,7 +48,7 @@ pub fn buildSidebar(root: anytype, theme: theme_mod.Theme) ui.SurfaceNode {
     };
 }
 
-pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
     _ = root;
     _ = pressed_id;
     return .none;

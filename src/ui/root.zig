@@ -13,17 +13,15 @@ const welcome_mod = @import("welcome.zig");
 const sidebar_mod = @import("sidebar.zig");
 const top_controls_mod = @import("top_controls.zig");
 const csd_mod = @import("csd.zig");
-const types = @import("ui_types.zig");
-
-// TEMP till decoration is in otter lib
-pub const Decoration = types.Decoration;
+const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 /// Surface IDs and layout numbers for this root. Bump `UiState` bucket sizes when the tree grows.
 pub const Ids = struct {
+    pub const app_name = "Otter Examples";
+    pub const app_id = "otter-examples";
+
     pub const panel_width: u16 = 400;
     pub const panel_height: u16 = 500;
-    // Temp until it's setting in otter
-    pub const decoration: Decoration = .server;
 
     pub const card = ui.SurfaceId.namedComptime("root.card");
     pub const panel = ui.SurfaceId.namedComptime("root.panel");
@@ -48,9 +46,9 @@ pub const CardPlacement = enum {
     center,
 };
 
-pub const PressResult = types.PressResult;
-pub const CsdAction = types.CsdAction;
-pub const PointerOpts = types.PointerOpts;
+pub const PointerOpts = struct {
+    debug_overlay: bool = false,
+};
 
 pub const otter_icon_png = @embedFile("../assets/otter-shell-icon.png");
 
@@ -121,8 +119,8 @@ pub const Root = struct {
             .border_width = 1,
         });
 
-        if (Ids.decoration == .client) {
-            csd_mod.buildTitlebar(self, "test", theme, false);
+        if (theme.decorations.prefered_decoration_type == .client) {
+            csd_mod.buildTitlebar(self, Ids.app_name, theme, false);
         }
         top_controls_mod.buildTopControls(self);
         welcome_mod.buildWelcomeCard(self, theme, viewport, title_text);
@@ -217,10 +215,10 @@ pub const Root = struct {
         self: *Root,
         ui_state: *UiState,
         point: geo.Point,
-    ) PressResult {
+    ) xdg_app_mod.PressResult {
         const press = ui_state.dispatch(.{ .button_press = .{ .point = point, .button = 1 } });
 
-        var result: PressResult = if (press.id.eql(ui.SurfaceId.none)) .none else .input;
+        var result: xdg_app_mod.PressResult = if (press.id.eql(ui.SurfaceId.none)) .none else .input;
         result = mergePressResult(result, top_controls_mod.checkPress(self, press.id));
         result = mergePressResult(result, welcome_mod.checkPress(self, press.id));
         result = mergePressResult(result, sidebar_mod.checkPress(self, press.id));
@@ -228,7 +226,7 @@ pub const Root = struct {
         return result;
     }
 
-    fn mergePressResult(current: PressResult, local: PressResult) PressResult {
+    fn mergePressResult(current: xdg_app_mod.PressResult, local: xdg_app_mod.PressResult) xdg_app_mod.PressResult {
         return switch (local) {
             .sidebar => .sidebar,
             .damage => |id| .{ .damage = id },

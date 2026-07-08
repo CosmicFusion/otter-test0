@@ -4,7 +4,7 @@ const ui = @import("otter_ui");
 const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 
-const types = @import("ui_types.zig");
+const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 pub const Ids = struct {
     pub const titlebar_height: u16 = 36;
@@ -80,27 +80,27 @@ fn titlebarButton(id: ui.SurfaceId, text: []const u8) ui.SurfaceNode {
     };
 }
 
-fn minimizePressed(root: anytype) types.PressResult {
+fn minimizePressed(root: anytype) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .minimize };
 }
 
-fn maximizePressed(root: anytype) types.PressResult {
+fn maximizePressed(root: anytype) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .maximize };
 }
 
-fn closePressed(root: anytype) types.PressResult {
+fn closePressed(root: anytype) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .close };
 }
 
-fn movePressed(root: anytype) types.PressResult {
+fn movePressed(root: anytype) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .move };
 }
 
-pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) types.PressResult {
+pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
     if (pressed_id.eql(Ids.minimize)) return minimizePressed(root);
     if (pressed_id.eql(Ids.maximize)) return maximizePressed(root);
     if (pressed_id.eql(Ids.close)) return closePressed(root);

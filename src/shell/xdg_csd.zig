@@ -6,9 +6,6 @@ const ui = @import("otter_ui");
 const ow = @import("otter_wayland");
 
 const csd_mod = @import("../ui/csd.zig");
-const ui_types = @import("../ui/ui_types.zig");
-
-pub const Edge = ui_types.Edge;
 
 pub const Hit = union(enum) {
     content,
@@ -22,6 +19,25 @@ pub const PressResult = union(enum) {
     close,
     minimize,
     maximize,
+    move,
+    resize: Edge,
+};
+
+pub const Edge = enum {
+    top,
+    bottom,
+    left,
+    right,
+    top_left,
+    top_right,
+    bottom_left,
+    bottom_right,
+};
+
+pub const CsdAction = union(enum) {
+    minimize,
+    maximize,
+    close,
     move,
     resize: Edge,
 };
