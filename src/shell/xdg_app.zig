@@ -107,7 +107,7 @@ pub const App = struct {
             .{ .request_server_side_decorations = request_server_side_decorations },
         );
         self.toplevel.bindListeners();
-        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32 + if (self.prefered_decoration_type == .client or (self.prefered_decoration_type == .client_floating and !self.toplevel.current_state.maximized)) csd_mod.Ids.titlebar_height else 0);
+        self.toplevel.setMinSize(root_mod.Ids.panel_width + 32, root_mod.Ids.panel_height + 32 + if (self.prefered_decoration_type == .client or (self.prefered_decoration_type == .client_floating and !self.toplevel.current_state.maximized)) self.theme.csd.titlebar_height else 0);
         if (self.toplevel.wl_surface) |surface| {
             self.redraw.bind(surface, drawCallback, self);
         }
@@ -305,7 +305,7 @@ fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaq
         const old_hover = app.ui_state.input.hovered;
         const old_active = app.ui_state.input.active;
         if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_floating and !app.toplevel.current_state.maximized)) {
-            switch (app.csd.hit(app.pointer, app.viewport())) {
+            switch (app.csd.hit(app.theme, app.pointer, app.viewport())) {
                 .resize => |edge| {
                     performCsdAction(app, .{ .resize = edge });
                     return;
@@ -377,7 +377,7 @@ fn performCsdAction(app: *App, action: xdg_csd_mod.CsdAction) void {
 
 fn applyPointerCursor(app: *App) void {
     if (app.prefered_decoration_type == .client or (app.prefered_decoration_type == .client_floating and !app.toplevel.current_state.maximized)) {
-        if (app.csd.resizeCursor(app.pointer, app.viewport())) |edge| {
+        if (app.csd.resizeCursor(app.theme, app.pointer, app.viewport())) |edge| {
             app.seat_state.setCursorShape(xdg_csd_mod.resizeCursorShape(edge));
             return;
         }

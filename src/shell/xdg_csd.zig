@@ -43,33 +43,33 @@ pub const CsdAction = union(enum) {
 };
 
 pub const Chrome = struct {
-    pub fn contentRect(viewport: geo.Rect) geo.Rect {
+    pub fn contentRect(theme: theme_mod.Theme, viewport: geo.Rect) geo.Rect {
         return .{
             .x = viewport.x,
-            .y = viewport.y + csd_mod.Ids.titlebar_height,
+            .y = viewport.y + theme.csd.titlebar_height,
             .width = viewport.width,
-            .height = viewport.height -| csd_mod.Ids.titlebar_height,
+            .height = viewport.height -| theme.csd.titlebar_height,
         };
     }
 
-    pub fn titlebarRect(viewport: geo.Rect) geo.Rect {
+    pub fn titlebarRect(theme: theme_mod.Theme, viewport: geo.Rect) geo.Rect {
         return .{
             .x = viewport.x,
             .y = viewport.y,
             .width = viewport.width,
-            .height = csd_mod.Ids.titlebar_height,
+            .height = theme.csd.titlebar_height,
         };
     }
 
-    pub fn hit(self: *const Chrome, point: geo.Point, viewport: geo.Rect) Hit {
+    pub fn hit(self: *const Chrome, theme: theme_mod.Theme, point: geo.Point, viewport: geo.Rect) Hit {
         _ = self;
         if (resizeEdge(point, viewport)) |edge| return .{ .resize = edge };
-        if (point.y >= viewport.y + csd_mod.Ids.titlebar_height) return .content;
+        if (point.y >= viewport.y + theme.csd.titlebar_height) return .content;
         return .titlebar;
     }
 
-    pub fn resizeCursor(self: *const Chrome, point: geo.Point, viewport: geo.Rect) ?Edge {
-        return switch (self.hit(point, viewport)) {
+    pub fn resizeCursor(self: *const Chrome, theme: theme_mod.Theme, point: geo.Point, viewport: geo.Rect) ?Edge {
+        return switch (self.hit(theme, point, viewport)) {
             .resize => |edge| edge,
             else => null,
         };

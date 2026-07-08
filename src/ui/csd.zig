@@ -7,7 +7,6 @@ const geo = @import("otter_geo");
 const xdg_app_mod = @import("../shell/xdg_app.zig");
 
 pub const Ids = struct {
-    pub const titlebar_height: u16 = 36;
     pub const resize_margin: u16 = 6;
 
     pub const titlebar = ui.SurfaceId.namedComptime("csd.titlebar");
@@ -24,19 +23,19 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
         .border = theme.surfaces.border_subtle,
         .highlight_edge = theme.surfaces.highlight_edge,
         .radius = 0,
-        .border_width = 1,
+        .border_width = theme.csd.border_size,
     });
 
-    root.titlebar_children[0] = ui.SurfaceNode.label(Ids.title, title, 13, theme.colors.foreground);
+    root.titlebar_children[0] = ui.SurfaceNode.label(Ids.title, title, theme.csd.titlebar_text_size, theme.colors.foreground);
     root.titlebar_children[0].layout = .{
         .width = .fill,
         .height = .fill,
         .align_y = .center,
     };
 
-    root.titlebar_children[1] = titlebarButton(Ids.minimize, "_");
-    root.titlebar_children[2] = titlebarButton(Ids.maximize, if (maximized) "[]" else "[ ]");
-    root.titlebar_children[3] = titlebarButton(Ids.close, "x");
+    root.titlebar_children[1] = titlebarButton(Ids.minimize, theme, "—");
+    root.titlebar_children[2] = titlebarButton(Ids.maximize, theme, if (maximized) "🗖" else "☐");
+    root.titlebar_children[3] = titlebarButton(Ids.close, theme, "×");
 
     root.titlebar_layers[1] = .{
         .id = Ids.titlebar,
@@ -44,8 +43,8 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
         .layout = .{
             .width = .fill,
             .height = .fill,
-            .padding = .{ .west = 12, .east = 6, .north = 4, .south = 4 },
-            .gap = 4,
+            .padding = .{ .west = theme.csd.button_padding, .east = theme.csd.button_padding, .north = theme.csd.button_padding, .south = theme.csd.button_padding },
+            .gap = theme.csd.titlebar_padding,
             .align_y = .center,
         },
         .hit = .generic,
@@ -55,7 +54,7 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
     root.window_children[root.window_children_count] = .{
         .id = Ids.titlebar,
         .kind = .stack,
-        .layout = .{ .width = .fill, .height = .{ .fixed = Ids.titlebar_height } },
+        .layout = .{ .width = .fill, .height = .{ .fixed = theme.csd.titlebar_height } },
         .children = root.titlebar_layers[0..2],
     };
     root.window_children_count += 1;
@@ -70,12 +69,12 @@ pub fn ownsId(id: ui.SurfaceId) bool {
         id.eql(Ids.close);
 }
 
-fn titlebarButton(id: ui.SurfaceId, text: []const u8) ui.SurfaceNode {
+fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8) ui.SurfaceNode {
     return .{
         .id = id,
         .kind = .leaf,
-        .layout = .{ .width = .{ .fixed = 34 }, .height = .{ .fixed = 26 } },
-        .content = .{ .button = .{ .text = text, .font_size = 12 } },
+        .layout = .{ .width = .{ .fixed = theme.csd.button_width }, .height = .{ .fixed = theme.csd.button_height } },
+        .content = .{ .button = .{ .text = text, .font_size = theme.csd.button_height } },
         .hit = .button,
     };
 }
