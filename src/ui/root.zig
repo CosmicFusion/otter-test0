@@ -104,7 +104,7 @@ pub const Root = struct {
     }
 
     /// Build the root card (fixed size). Hover state comes from `ui_state.input`.
-    pub fn buildCard(self: *Root, viewport: geo.Rect, title_text: []const u8, theme: theme_mod.Theme, maximized: bool) ui.SurfaceNode {
+    pub fn buildCard(self: *Root, viewport: geo.Rect, title_text: []const u8, theme: theme_mod.Theme, maximized: bool, window_active: bool) ui.SurfaceNode {
         self.main_count = 0;
         self.window_children_count = 0;
         const wide_mode = viewport.width > self.sidebar_breakpoint;
@@ -120,7 +120,7 @@ pub const Root = struct {
         });
 
         if (theme.decorations.prefered_decoration_type == .client or (theme.decorations.prefered_decoration_type == .client_floating) and !maximized) {
-            csd_mod.buildTitlebar(self, Ids.app_name, theme, maximized);
+            csd_mod.buildTitlebar(self, Ids.app_name, theme, maximized, window_active);
         }
         top_controls_mod.buildTopControls(self);
         welcome_mod.buildWelcomeCard(self, theme, viewport, title_text);

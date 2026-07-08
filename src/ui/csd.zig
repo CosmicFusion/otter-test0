@@ -17,9 +17,9 @@ pub const Ids = struct {
     pub const close = ui.SurfaceId.namedComptime("csd.close");
 };
 
-pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, maximized: bool) void {
+pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, maximized: bool, window_active: bool) void {
     root.titlebar_layers[0] = ui.SurfaceNode.panel(Ids.background, .{ .width = .fill, .height = .fill }, .{
-        .background = theme.panelColor(theme.surfaces.surface),
+        .background = if (window_active) theme.csd.titlebar_bg_active else theme.csd.titlebar_bg_inactive,
         .border = theme.surfaces.border_subtle,
         .highlight_edge = theme.surfaces.highlight_edge,
         .radius = 0,
@@ -33,9 +33,27 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
         .align_y = .center,
     };
 
-    root.titlebar_children[1] = titlebarButton(Ids.minimize, theme, "—");
-    root.titlebar_children[2] = titlebarButton(Ids.maximize, theme, if (maximized) "🗖" else "☐");
-    root.titlebar_children[3] = titlebarButton(Ids.close, theme, "×");
+    root.titlebar_children[1] = titlebarButton(
+        Ids.minimize,
+        theme,
+        "_",
+        if (window_active) theme.csd.button_minimize_bg else theme.csd.button_icon_color_inactive,
+        theme.csd.button_minimize_hover,
+    );
+    root.titlebar_children[2] = titlebarButton(
+        Ids.maximize,
+        theme,
+        if (maximized) "[]" else "+",
+        if (window_active) theme.csd.button_maximize_bg else theme.csd.button_icon_color_inactive,
+        theme.csd.button_maximize_hover,
+    );
+    root.titlebar_children[3] = titlebarButton(
+        Ids.close,
+        theme,
+        "x",
+        if (window_active) theme.csd.button_close_bg else theme.csd.button_icon_color_inactive,
+        theme.csd.button_close_hover,
+    );
 
     root.titlebar_layers[1] = .{
         .id = Ids.titlebar,
@@ -69,12 +87,20 @@ pub fn ownsId(id: ui.SurfaceId) bool {
         id.eql(Ids.close);
 }
 
-fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8) ui.SurfaceNode {
+fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8, background_color: render.Color, hover_background: render.Color) ui.SurfaceNode {
     return .{
         .id = id,
         .kind = .leaf,
         .layout = .{ .width = .{ .fixed = theme.csd.button_width }, .height = .{ .fixed = theme.csd.button_height } },
-        .content = .{ .button = .{ .text = text, .font_size = theme.csd.button_height } },
+        .content = .{
+            .button = .{
+                .text = text,
+                .font_size = @intFromFloat(std.math.round(@as(f32, @floatFromInt(theme.csd.button_height)) * 0.6)),
+                .background = background_color,
+                .hover_background = hover_background,
+                .radius = theme.csd.border_radius,
+            },
+        },
         .hit = .button,
     };
 }

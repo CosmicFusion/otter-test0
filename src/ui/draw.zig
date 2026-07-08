@@ -31,6 +31,7 @@ pub const Frame = struct {
     text_provider: ui.TextSystemProvider,
     csd: ?*xdg_csd_mod.Chrome = null,
     maximized: bool = false,
+    active: bool = false,
 };
 
 pub fn draw(frame: Frame) void {
@@ -67,7 +68,7 @@ pub fn draw(frame: Frame) void {
     }
 
     const root_card_rect = root_mod.Root.cardRect(viewport, frame.card_placement);
-    const root = frame.root.buildCard(viewport, frame.shell_label, frame.theme, frame.maximized);
+    const root = frame.root.buildCard(viewport, frame.shell_label, frame.theme, frame.maximized, frame.active);
     _ = ui_frame.render(&root, root_card_rect) catch {};
     frame.root.queueOverlays(&ui_frame, viewport, frame.theme);
     ui_frame.finish() catch {};

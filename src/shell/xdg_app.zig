@@ -201,6 +201,7 @@ pub const App = struct {
             .theme = self.theme,
             .text_provider = self.textSystemProvider(),
             .maximized = self.toplevel.current_state.maximized,
+            .active = self.toplevel.current_state.activated,
         });
 
         if (self.ui_state.debugOverlayMode() == .metrics) {
