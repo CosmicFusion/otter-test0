@@ -163,10 +163,7 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
 pub fn ownsId(id: ui.SurfaceId) bool {
     return id.eql(Ids.titlebar) or
         id.eql(Ids.background) or
-        id.eql(Ids.title) or
-        id.eql(Ids.minimize) or
-        id.eql(Ids.maximize) or
-        id.eql(Ids.close);
+        id.eql(Ids.title);
 }
 
 fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8, background_color: render.Color, hover_background: render.Color) ui.SurfaceNode {
@@ -208,13 +205,13 @@ fn movePressed(root: anytype) xdg_app_mod.PressResult {
 }
 
 pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
-    for (root.minimize_ids) |id| {
+    for (root.minimize_ids[0..root.minimize_ids_count]) |id| {
         if (pressed_id.eql(id)) return minimizePressed(root);
     }
-    for (root.maximize_ids) |id| {
+    for (root.maximize_ids[0..root.maximize_ids_count]) |id| {
         if (pressed_id.eql(id)) return maximizePressed(root);
     }
-    for (root.close_ids) |id| {
+    for (root.close_ids[0..root.close_ids_count]) |id| {
         if (pressed_id.eql(id)) return closePressed(root);
     }
     if (pressed_id.eql(Ids.titlebar) or
