@@ -177,7 +177,7 @@ fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8, ba
                 .font_size = @intFromFloat(std.math.round(@as(f32, @floatFromInt(theme.csd.button_height)) * 0.6)),
                 .background = background_color,
                 .hover_background = hover_background,
-                .radius = theme.csd.border_radius,
+                .radius = theme.csd.button_radius,
             },
         },
         .hit = .button,
