@@ -74,6 +74,7 @@ pub const App = struct {
         self.seat_state.setCallbacks(.{
             .on_enter = onPointerEnter,
             .on_motion = onPointerMotion,
+            .on_leave = onPointerLeave,
             .on_button = onPointerButton,
             .context = self,
         });
@@ -299,6 +300,18 @@ fn onPointerMotion(point: geo.Point, ctx: ?*anyopaque) void {
     applyPointerCursor(app);
 }
 
+fn onPointerLeave(_: *wl.Surface, ctx: ?*anyopaque) void {
+    const app: *App = @ptrCast(@alignCast(ctx orelse return));
+    const old_hover = app.ui_state.input.hovered;
+    const old_active = app.ui_state.input.active;
+    _ = app.ui_state.dispatch(.pointer_leave);
+    if (!old_hover.eql(ui.SurfaceId.none) or !old_active.eql(ui.SurfaceId.none)) {
+        requestInputRedraw(app, old_hover, old_active);
+    } else if (app.debug_overlay_mode != .off) {
+        app.redraw.request();
+    }
+}
+
 fn onPointerButton(button: ow.MouseButton, state: ow.ButtonState, ctx: ?*anyopaque) void {
     if (!button.isLeft()) return;
     const app: *App = @ptrCast(@alignCast(ctx orelse return));
@@ -413,7 +426,14 @@ fn damageSurface(app: *App, id: ui.SurfaceId) void {
         app.damage.markFullDamage();
         return;
     };
-    app.damage.addRect(element.rect);
+    const viewport = geo.Rect{
+        .x = 0,
+        .y = 0,
+        .width = app.surface_width,
+        .height = app.surface_height,
+    };
+    const padded = element.rect.addPadding(geo.Padding.uniform(4));
+    app.damage.addRect(padded.intersection(viewport) orelse element.rect);
 }
 
 fn damageSidebar(app: *App) void {
