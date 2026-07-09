@@ -5,6 +5,7 @@ const theme_mod = @import("otter_theme");
 const geo = @import("otter_geo");
 
 const xdg_app_mod = @import("../shell/xdg_app.zig");
+const root_mod = @import("root.zig");
 
 pub const Ids = struct {
     pub const resize_margin: u16 = 6;
@@ -14,12 +15,10 @@ pub const Ids = struct {
     pub const title = ui.SurfaceId.namedComptime("csd.title");
 };
 
-pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, maximized: bool, window_active: bool) void {
+pub fn buildTitlebar(root: *root_mod.Root, title: []const u8, theme: theme_mod.Theme, maximized: bool, window_active: bool) void {
     var titlebar_children_start_count: u16 = 0;
     var titlebar_children_end_count: u16 = 0;
-    const theme_button_layout = theme.csd.button_layout;
-
-    const button_layout = if (theme_button_layout.len < 19) theme_button_layout else ":sbc";
+    const button_layout = theme.csd.button_layout;
 
     root.maximize_ids_count = 0;
     root.close_ids_count = 0;
@@ -47,9 +46,15 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
     var i: usize = button_layout.len;
     while (i > 0) {
         i -= 1;
+        if ((titlebar_children_start_count == root_mod.max_csd_buttons_per_side) or (titlebar_children_end_count == root_mod.max_csd_buttons_per_side)) {
+            break;
+        }
         const char = button_layout[i];
         const count = if (layout_section_end) titlebar_children_end_count else titlebar_children_start_count;
         if (char == 'c') {
+            if (root.minimize_ids_count == root_mod.max_csd_buttons_per_action) {
+                continue;
+            }
             var buf: [32]u8 = undefined;
             const id_name = std.fmt.bufPrint(&buf, "{s}{d}", .{ "csd.minimize", count }) catch "";
             const id = ui.SurfaceId.named(id_name);
@@ -72,6 +77,9 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
             continue;
         }
         if (char == 'b') {
+            if (root.maximize_ids_count == root_mod.max_csd_buttons_per_action) {
+                continue;
+            }
             var buf: [32]u8 = undefined;
             const id_name = std.fmt.bufPrint(&buf, "{s}{d}", .{ "csd.maximize", count }) catch "";
             const id = ui.SurfaceId.named(id_name);
@@ -94,6 +102,9 @@ pub fn buildTitlebar(root: anytype, title: []const u8, theme: theme_mod.Theme, m
             continue;
         }
         if (char == 's') {
+            if (root.close_ids_count == root_mod.max_csd_buttons_per_action) {
+                continue;
+            }
             var buf: [32]u8 = undefined;
             const id_name = std.fmt.bufPrint(&buf, "{s}{d}", .{ "csd.close", count }) catch "";
             const id = ui.SurfaceId.named(id_name);
@@ -184,27 +195,27 @@ fn titlebarButton(id: ui.SurfaceId, theme: theme_mod.Theme, text: []const u8, ba
     };
 }
 
-fn minimizePressed(root: anytype) xdg_app_mod.PressResult {
+fn minimizePressed(root: *root_mod.Root) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .minimize };
 }
 
-fn maximizePressed(root: anytype) xdg_app_mod.PressResult {
+fn maximizePressed(root: *root_mod.Root) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .maximize };
 }
 
-fn closePressed(root: anytype) xdg_app_mod.PressResult {
+fn closePressed(root: *root_mod.Root) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .close };
 }
 
-fn movePressed(root: anytype) xdg_app_mod.PressResult {
+fn movePressed(root: *root_mod.Root) xdg_app_mod.PressResult {
     _ = root;
     return .{ .csd = .move };
 }
 
-pub fn checkPress(root: anytype, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
+pub fn checkPress(root: *root_mod.Root, pressed_id: ui.SurfaceId) xdg_app_mod.PressResult {
     for (root.minimize_ids[0..root.minimize_ids_count]) |id| {
         if (pressed_id.eql(id)) return minimizePressed(root);
     }

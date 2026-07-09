@@ -30,10 +30,13 @@ pub const Ids = struct {
     pub const main_wrapper = ui.SurfaceId.namedComptime("root.main_wrapper");
 };
 
+pub const max_csd_buttons_per_side: usize = 6;
+pub const max_csd_buttons_per_action: usize = 2;
+
 pub const UiState = ui.UiState(.{
-    .elements = 80,
-    .hit_regions = 26,
-    .overlays = 1,
+    .elements = 128,
+    .hit_regions = 64,
+    .overlays = 2,
     .focus_scopes = 1,
     .scroll_states = 0,
     .text_states = 1,
@@ -73,15 +76,15 @@ pub const Root = struct {
     top_controls: [2]ui.SurfaceNode = undefined,
     // CSD structs
     window_children_count: usize = 0,
-    maximize_ids: [10]ui.SurfaceId = undefined,
+    maximize_ids: [max_csd_buttons_per_action]ui.SurfaceId = undefined,
     maximize_ids_count: usize = 0,
-    minimize_ids: [10]ui.SurfaceId = undefined,
+    minimize_ids: [max_csd_buttons_per_action]ui.SurfaceId = undefined,
     minimize_ids_count: usize = 0,
-    close_ids: [10]ui.SurfaceId = undefined,
+    close_ids: [max_csd_buttons_per_action]ui.SurfaceId = undefined,
     close_ids_count: usize = 0,
     titlebar_layers: [4]ui.SurfaceNode = undefined,
-    titlebar_children_start: [3]ui.SurfaceNode = undefined,
-    titlebar_children_end: [3]ui.SurfaceNode = undefined,
+    titlebar_children_start: [max_csd_buttons_per_side]ui.SurfaceNode = undefined,
+    titlebar_children_end: [max_csd_buttons_per_side]ui.SurfaceNode = undefined,
     //
     window_children: [2]ui.SurfaceNode = undefined,
     main_children: [2]ui.SurfaceNode = undefined,
